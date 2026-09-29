@@ -121,27 +121,22 @@ async function upd(id, patch, msg) {
 function showLogin(message, kind) {
   S.profile = null;
   const m = S.mode || 'in';
-  const titles = { in: ['Welcome back', 'Sign in to your workspace.'], up: ['Create your account', 'Use the email your team invited.'], magic: ['Email me a link', "We'll send a one-click sign-in link."], reset: ['Reset password', "We'll email you a reset link."] };
+  const titles = { in: ['Welcome back', 'Sign in to your workspace.'], up: ['Create your account', 'Use the email your team invited.'], reset: ['Reset password', "We'll email you a reset link."] };
   const pw = (label, ac) => `<label>${label}</label><div class="pwrow"><input type="password" name="password" required minlength="6" autocomplete="${ac}" placeholder="At least 6 characters"><button type="button" class="btn sm" data-act="showpw" tabindex="-1">Show</button></div>`;
   const email = `<label>Email</label><input type="email" name="email" required autocomplete="email" placeholder="you@example.com" autofocus>`;
   const form = {
     in: `<form data-form="login">${email}${pw('Password', 'current-password')}<div class="authlinks"><a href="#" data-act="mode" data-v="reset">Forgot password?</a></div>
       <button class="btn primary big" type="submit">Sign in</button></form>
-      <div class="or"><span>or</span></div><button class="btn big" data-act="mode" data-v="magic" type="button">Email me a sign-in link</button>
       <p class="switch">New here? <a href="#" data-act="mode" data-v="up">Create an account</a></p>`,
     up: `<form data-form="signup">${email}${pw('Choose a password', 'new-password')}<button class="btn primary big" type="submit" style="margin-top:14px">Create account</button></form>
       <p class="switch">Already have an account? <a href="#" data-act="mode" data-v="in">Sign in</a></p>`,
-    magic: `<form data-form="magic">${email}<button class="btn primary big" type="submit" style="margin-top:14px">Send sign-in link</button></form>
-      <p class="switch"><a href="#" data-act="mode" data-v="in">Back to sign in</a></p>`,
     reset: `<form data-form="reset">${email}<button class="btn primary big" type="submit" style="margin-top:14px">Send reset link</button></form>
       <p class="switch"><a href="#" data-act="mode" data-v="in">Back to sign in</a></p>`,
   }[m];
-  app.innerHTML = `<div class="auth"><aside class="auth-side"><img src="flipbite-logo.png" alt="FlipBite"><h2>FlipBite<br>Link Tracker</h2>
-      <p>Every website, every link, every payout in one place.</p>
-      <ul><li>Live status from outreach to paid</li><li>Duplicate websites caught instantly</li><li>Updates in real time for the whole team</li></ul></aside>
-    <main class="auth-main"><div class="auth-card"><img class="auth-logo" src="flipbite-logo.png" alt="FlipBite">
-      <h1>${titles[m][0]}</h1><p class="lead">${titles[m][1]}</p>
-      ${message ? `<div class="notice ${kind === 'err' ? 'err' : ''}">${esc(message)}</div>` : ''}${form}</div></main></div>`;
+  app.innerHTML = `<div class="auth"><div class="auth-card"><img class="auth-logo" src="flipbite-logo.png" alt="FlipBite">
+    <div class="auth-brand">FlipBite <b>Link Tracker</b></div>
+    <h1>${titles[m][0]}</h1><p class="lead">${titles[m][1]}</p>
+    ${message ? `<div class="notice ${kind === 'err' ? 'err' : ''}">${esc(message)}</div>` : ''}${form}</div></div>`;
 }
 
 function showNewPassword() {
@@ -505,11 +500,6 @@ const forms = {
     const { data, error } = await sb.auth.signUp({ email: txt(d.get('email')), password: d.get('password'), options: { emailRedirectTo: location.origin + location.pathname } });
     if (error) return showLogin(/database|not been invited|signups/i.test(error.message) ? "This email hasn't been invited yet. Ask your manager." : error.message, 'err');
     if (!data.session) { S.mode = 'in'; showLogin('Account created. Check your email to confirm it, then sign in.'); }
-  },
-  async magic(f, d) {
-    const { error } = await sb.auth.signInWithOtp({ email: txt(d.get('email')), options: { emailRedirectTo: location.origin + location.pathname } });
-    if (error) return showLogin(/database|not been invited|signups/i.test(error.message) ? "This email hasn't been invited yet. Ask your manager." : error.message, 'err');
-    showLogin('Check your email for the sign-in link.');
   },
   async reset(f, d) {
     const { error } = await sb.auth.resetPasswordForEmail(txt(d.get('email')), { redirectTo: location.origin + location.pathname });
