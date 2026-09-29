@@ -263,24 +263,26 @@ function managerSites() {
 
 function commissionView() {
   const ym = S.month;
-  const members = S.people.filter(p => p.role === 'member');
+  const members = S.people.filter(p => p.role === 'member' || p.id === S.profile.id);
   const rows = members.map(m => {
+    const own = m.id === S.profile.id;
     const ws = S.sites.filter(w => w.member_id === m.id);
     const live = ws.reduce((a, w) => a + liveCount(w, ym), 0);
     return {
       m, total: ws.length, approved: ws.filter(w => !['boss_review', 'rejected'].includes(w.status)).length,
       rejected: ws.filter(w => w.status === 'rejected').length, live,
-      team: live * S.teamRate, boss: live * S.bossRate, share: live * (S.bossRate - S.teamRate),
+      own, team: own ? 0 : live * S.teamRate, boss: live * S.bossRate, share: own ? live * S.bossRate : live * (S.bossRate - S.teamRate),
     };
   });
   const sum = k => rows.reduce((a, r) => a + r[k], 0);
   const label = new Date(ym + '-01T00:00').toLocaleString(undefined, { month: 'long', year: 'numeric' });
   return `<div class="toolbar"><label style="margin:0">Month</label><input type="month" style="width:auto" value="${ym}" data-change="month"></div>
     <div class="stats"><div class="stat"><b>${money(sum('boss'))}</b><span>Client rate total</span></div><div class="stat"><b>${money(sum('team'))}</b><span>To team</span></div>
-    <div class="stat hot"><b>${money(sum('share'))}</b><span>Your share</span></div><div class="stat"><b>${sum('live')}</b><span>Live links</span></div></div>
-    <p class="sub" style="margin-top:12px">${label}: ${money(sum('boss'))} from client rate, ${money(sum('team'))} to team, your share ${money(sum('share'))}.</p>
+    <div class="stat hot"><b>${money(sum('share'))}</b><span>Your total income</span></div><div class="stat"><b>${sum('live')}</b><span>Live links</span></div>
+    <div class="stat"><b>${rows.filter(r => r.own).reduce((x, r) => x + r.live, 0)}</b><span>My own live links</span></div><div class="stat"><b>${money(rows.filter(r => r.own).reduce((x, r) => x + r.share, 0))}</b><span>My own income</span></div></div>
+    <p class="sub" style="margin-top:12px">${label}: ${money(sum('boss'))} from client rate, ${money(sum('team'))} to team, your total income ${money(sum('share'))}. Your own sites are paid at the full client rate.</p>
     ${rows.length ? `<div class="tablewrap"><table><thead><tr><th>Member</th><th class="num">Websites</th><th class="num">Approved+</th><th class="num">Rejected</th><th class="num">Live links</th><th class="num">Team payout</th><th class="num">Client rate</th><th class="num">My share</th></tr></thead><tbody>
-      ${rows.map(r => `<tr><td><b>${esc(r.m.name || r.m.email)}</b></td><td class="num">${r.total}</td><td class="num">${r.approved}</td><td class="num">${r.rejected}</td><td class="num">${r.live}</td><td class="num">${money(r.team)}</td><td class="num">${money(r.boss)}</td><td class="num">${money(r.share)}</td></tr>`).join('')}</tbody>
+      ${rows.map(r => `<tr><td><b>${esc(r.m.name || r.m.email)}</b>${r.own ? ' (you)' : ''}</td><td class="num">${r.total}</td><td class="num">${r.approved}</td><td class="num">${r.rejected}</td><td class="num">${r.live}</td><td class="num">${money(r.team)}</td><td class="num">${money(r.boss)}</td><td class="num">${money(r.share)}</td></tr>`).join('')}</tbody>
       <tfoot><tr><td>Total</td><td class="num">${sum('total')}</td><td class="num">${sum('approved')}</td><td class="num">${sum('rejected')}</td><td class="num">${sum('live')}</td><td class="num">${money(sum('team'))}</td><td class="num">${money(sum('boss'))}</td><td class="num">${money(sum('share'))}</td></tr></tfoot></table></div>`
       : '<div class="empty">No team members yet. Invite them in Settings.</div>'}`;
 }
@@ -454,8 +456,9 @@ const actions = {
   open: el => openDetail(el.dataset.id),
   whatsapp: () => copy(whatsappText()),
   export: csvExport,
-  import: () => openDrawer('Import websites', `<form data-form="import"><p class="hint">One website per line: <b>url, email, exchange/paid, price, member name</b> (comma or tab separated). Duplicates are skipped.</p>
-    <textarea name="rows" rows="10" required placeholder="example.com, info@example.com, paid, 150, Sara"></textarea>
+  import: () => openDrawer('Import websites', `<form data-form="import"><p class="hint">Upload a CSV file, or paste one website per line: <b>url, email, exchange/paid, price, member name, DA, traffic</b>. Leave the member blank to add it to yourself. Duplicates are skipped.</p>
+    <label>CSV file</label><input type="file" accept=".csv,.txt,text/csv" data-change="csvfile">
+    <label>Or paste rows</label><textarea name="rows" rows="10" required placeholder="example.com, info@example.com, paid, 150, Sara, 45, 12K"></textarea>
     <div style="margin-top:14px"><button class="btn primary big" type="submit">Import</button></div><div id="importres"></div></form>`, 'form'),
   rminvite: async el => { const { error } = await sb.from('invites').delete().eq('email', el.dataset.v); error ? toast(errMsg(error), 'err') : (toast('Invite removed'), refreshSoon()); },
   add: () => openDrawer('Add website', siteForm(), 'form'),
@@ -493,6 +496,22 @@ const actions = {
     need(w.id, 'Add next link', linkFields + (w.deal_type === 'paid' ? `<label>Price for this link ($)</label><input type="number" min="0" step="0.01" name="price" value="${w.price ?? ''}">` : ''), 'nextlink', `Next link (${linkNo(w) + 1} / ${w.possible_links})`);
   },
 };
+
+function parseRows(text) {
+  const rows = []; let row = [], cur = '', q = false;
+  const delim = text.includes('\t') && !text.includes(',') ? '\t' : ',';
+  const endRow = () => { row.push(cur.trim()); cur = ''; if (row.some(x => x)) rows.push(row); row = []; };
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (q) { if (ch === '"') { if (text[i + 1] === '"') { cur += '"'; i++; } else q = false; } else cur += ch; }
+    else if (ch === '"') q = true;
+    else if (ch === delim) { row.push(cur.trim()); cur = ''; }
+    else if (ch === '\n') endRow();
+    else if (ch !== '\r') cur += ch;
+  }
+  endRow();
+  return rows;
+}
 
 const forms = {
   async login(f, d) {
@@ -557,17 +576,16 @@ const forms = {
     const members = S.people.filter(p => p.role === 'member');
     const seen = new Set(S.sites.map(w => w.domain));
     let ok = 0; const skipped = [];
-    for (const line of String(d.get('rows')).split(/\r?\n/)) {
-      if (!line.trim()) continue;
-      const c = line.split(/\t|,/).map(x => x.trim());
-      if (/^(url|website)$/i.test(c[0])) continue;
+    for (const c of parseRows(String(d.get('rows')))) {
+      if (/^(url|website|domain)$/i.test(c[0])) continue;
       const dom = normDomain(c[0]);
-      const m = members.find(p => [p.name, p.email].some(x => x && x.toLowerCase() === (c[4] || '').toLowerCase()));
+      const who = (c[4] || '').toLowerCase();
+      const m = !who ? S.profile : members.find(p => [p.name, p.email].some(x => x && x.toLowerCase() === who));
       if (!dom.includes('.')) { skipped.push(`${c[0]}: invalid URL`); continue; }
       if (seen.has(dom)) { skipped.push(`${dom}: duplicate`); continue; }
-      if (!m) { skipped.push(`${dom}: unknown member "${c[4] || ''}"`); continue; }
+      if (!m) { skipped.push(`${dom}: unknown member "${c[4]}"`); continue; }
       const paid = /paid/i.test(c[2] || '');
-      const { error } = await sb.from('websites').insert({ url: c[0], contact_email: c[1] || null, deal_type: paid ? 'paid' : 'exchange', price: paid ? num(c[3]) : null, member_id: m.id });
+      const { error } = await sb.from('websites').insert({ url: c[0], contact_email: c[1] || null, deal_type: paid ? 'paid' : 'exchange', price: paid ? num(c[3]) : null, da: num(c[5]), traffic: c[6] || null, member_id: m.id });
       if (error) { skipped.push(`${dom}: ${errMsg(error)}`); continue; }
       seen.add(dom); ok++;
     }
@@ -577,6 +595,13 @@ const forms = {
 };
 
 const changes = {
+  csvfile(t) {
+    const file = t.files[0];
+    if (!file) return;
+    const r = new FileReader();
+    r.onload = () => { const ta = $('textarea[name=rows]'); if (ta) ta.value = String(r.result).replace(/^\uFEFF/, ''); toast(`Loaded ${file.name}. Check the rows, then click Import.`); };
+    r.readAsText(file);
+  },
   async userrole(t) {
     const { error } = await sb.rpc('set_user_role', { p_id: t.dataset.id, p_role: t.value });
     if (error) { toast(errMsg(error), 'err'); return refreshSoon(); }
