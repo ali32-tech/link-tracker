@@ -214,7 +214,10 @@ function openDetail(id) {
   const role = eff().role;
   let extra = '';
   if (role === 'manager') {
-    extra = `<div class="btns" style="margin-top:14px"><button class="btn danger" data-act="del" data-id="${w.id}">Delete</button></div>`;
+    const own = w.member_id === S.profile.id && !S.preview;
+    const step = !own ? '' : w.status === 'link_ready' ? `<button class="btn" data-act="copymsg" data-id="${w.id}">Copy message for website</button><button class="btn primary" data-act="sentbtn" data-id="${w.id}">Link sent to website</button>`
+      : w.status === 'sent' ? `<button class="btn primary" data-act="livebtn" data-id="${w.id}">Link is live</button>` : '';
+    extra = `<div class="btns" style="margin-top:14px">${step}${own ? `<button class="btn" data-act="edit" data-id="${w.id}">Edit</button>` : ''}<button class="btn danger" data-act="del" data-id="${w.id}">Delete</button></div>`;
   } else if (role === 'boss') {
     const sel = BOSS_STATUSES.includes(w.status) ? '' : `<option value="${w.status}" selected disabled>${ST[w.status].label} (current)</option>`;
     extra = `<h2 style="font-size:15px">Correct a mistake</h2>
@@ -243,13 +246,13 @@ function managerSites() {
   const q = f.q.trim().toLowerCase();
   const rows = all.filter(w => (!f.status || w.status === f.status) && (!f.member || w.member_id === f.member) &&
     (!f.deal || w.deal_type === f.deal) && (!q || w.domain.includes(q) || (w.contact_email || '').toLowerCase().includes(q)));
-  const members = S.people.filter(p => p.role === 'member');
+  const members = S.people.filter(p => p.role === 'member' || p.id === S.profile.id);
   return `<div class="pipe">${Object.keys(ST).map(k => `<button class="${f.status === k ? 'on' : ''}" data-act="pipe" data-v="${k}"><b>${counts[k]}</b><span>${ST[k].label}</span></button>`).join('')}</div>
     <div class="toolbar"><input type="search" id="mq" placeholder="Search website or email" value="${esc(f.q)}" data-input="mq">
       <select data-change="mmember"><option value="">All members</option>${members.map(m => `<option value="${m.id}" ${f.member === m.id ? 'selected' : ''}>${esc(m.name || m.email)}</option>`).join('')}</select>
       <select data-change="mdeal"><option value="">All deals</option><option value="exchange" ${f.deal === 'exchange' ? 'selected' : ''}>Exchange</option><option value="paid" ${f.deal === 'paid' ? 'selected' : ''}>Paid</option></select>
       ${f.status || f.member || f.deal || f.q ? '<button class="btn sm" data-act="clearf">Clear filters</button>' : ''}</div>
-    <div class="btns" style="margin-bottom:12px"><button class="btn primary" data-act="whatsapp">Copy WhatsApp message</button>
+    <div class="btns" style="margin-bottom:12px"><button class="btn primary" data-act="add">+ Add website</button><button class="btn" data-act="whatsapp">Copy WhatsApp message</button>
       <button class="btn" data-act="import">Import</button><button class="btn" data-act="export">Export CSV</button></div>
     ${rows.length ? `<div class="tablewrap"><table><thead><tr><th>Website</th><th>Member</th><th>Deal</th><th class="num">Price</th><th>DA / Traffic</th><th class="num">Links</th><th>Status</th><th>Updated</th></tr></thead><tbody>
       ${rows.map(w => `<tr data-act="open" data-id="${w.id}"><td><b>${esc(w.domain)}</b></td><td>${esc(memberName(w.member_id))}</td><td>${dealLabel(w.deal_type)}</td>
@@ -287,7 +290,7 @@ function settingsView() {
     <div class="grid2"><div><label>Team rate ($)</label><input type="number" step="0.01" min="0" name="team_rate" value="${S.teamRate}" required></div>
     <div><label>Client rate ($)</label><input type="number" step="0.01" min="0" name="boss_rate" value="${S.bossRate}" required></div></div>
     <p class="hint">The client rate is visible to you only.</p><button class="btn primary" type="submit">Save rates</button></form>
-    <h2>Team</h2>${S.people.length ? `<div class="tablewrap"><table><thead><tr><th>Name</th><th>Email</th></tr></thead><tbody>${S.people.map(p => `<tr><td>${esc(p.name || '—')}</td><td>${esc(p.email)}</td></tr>`).join('')}
+    <h2>Team</h2>${S.people.length ? `<div class="tablewrap"><table><thead><tr><th>Name</th><th>Email</th><th>Role</th></tr></thead><tbody>${S.people.map(p => `<tr><td>${esc(p.name || '—')}</td><td>${esc(p.email)}</td><td>${p.role === 'manager' ? 'Manager' : `<select data-change="userrole" data-id="${p.id}" style="width:auto"><option value="member" ${p.role === 'member' ? 'selected' : ''}>Team member</option><option value="boss" ${p.role === 'boss' ? 'selected' : ''}>Director</option></select>`}</td></tr>`).join('')}
       ${S.invites.map(i => `<tr><td><i>Invited</i></td><td>${esc(i.email)}</td><td><button class="btn sm danger" data-act="rminvite" data-v="${esc(i.email)}">Remove</button></td></tr>`).join('')}</tbody></table></div>` : ''}`;
 }
 
@@ -406,7 +409,7 @@ function siteForm(w) {
     <label>Contact email</label><input type="email" name="contact_email" value="${esc(w.contact_email || '')}">
     <label>Deal type</label><select name="deal_type"><option value="exchange" ${w.deal_type === 'exchange' ? 'selected' : ''}>Exchange</option><option value="paid" ${w.deal_type === 'paid' ? 'selected' : ''}>Paid</option></select>
     <div class="grid2"><div><label>DA</label><input type="number" min="0" max="100" name="da" value="${w.da ?? ''}"></div>
-    <div><label>Traffic (monthly)</label><input type="number" min="0" name="traffic" value="${w.traffic ?? ''}"></div></div>
+    <div><label>Traffic</label><input name="traffic" maxlength="20" placeholder="e.g. 12K, 1.5M" value="${esc(w.traffic ?? '')}"></div></div>
     <div id="pricewrap" class="${w.deal_type === 'paid' ? '' : 'hidden'}"><label>Price ($)</label><input type="number" min="0" step="0.01" name="price" value="${w.price ?? ''}"></div>
     <label>Notes</label><textarea name="notes">${esc(w.notes || '')}</textarea>
     <div style="margin-top:14px"><button class="btn primary big" type="submit">${w.id ? 'Save changes' : 'Add website'}</button></div></form>`;
@@ -518,7 +521,7 @@ const forms = {
   },
   async site(f, d) {
     const paid = d.get('deal_type') === 'paid';
-    const row = { url: txt(d.get('url')), contact_email: txt(d.get('contact_email')), deal_type: d.get('deal_type'), da: num(d.get('da')), traffic: num(d.get('traffic')), price: paid ? num(d.get('price')) : null, notes: txt(d.get('notes')) };
+    const row = { url: txt(d.get('url')), contact_email: txt(d.get('contact_email')), deal_type: d.get('deal_type'), da: num(d.get('da')), traffic: txt(d.get('traffic')), price: paid ? num(d.get('price')) : null, notes: txt(d.get('notes')) };
     if (!normDomain(row.url).includes('.')) return toast('Enter a valid website URL', 'err');
     const id = f.dataset.id;
     const { error } = id ? await sb.from('websites').update(row).eq('id', id) : await sb.from('websites').insert({ ...row, member_id: S.profile.id });
@@ -574,6 +577,11 @@ const forms = {
 };
 
 const changes = {
+  async userrole(t) {
+    const { error } = await sb.rpc('set_user_role', { p_id: t.dataset.id, p_role: t.value });
+    if (error) { toast(errMsg(error), 'err'); return refreshSoon(); }
+    toast('Role updated'); await loadData(); render();
+  },
   async myname(t) {
     const n = t.value.trim();
     if (!n || n === S.profile.name) { t.value = S.profile.name; return; }

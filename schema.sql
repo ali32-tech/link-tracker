@@ -41,7 +41,7 @@ create table public.websites (
   deal_type text not null check (deal_type in ('exchange','paid')),
   price numeric,
   da int,
-  traffic int,
+  traffic text,
   notes text,
   status text not null default 'boss_review' check (status in
     ('boss_review','approved','rejected','link_ready','sent','live','invoice_received','paid')),
@@ -124,7 +124,7 @@ begin
   new.id := old.id; new.member_id := old.member_id; new.created_at := old.created_at;
   if current_setting('app.bypass_guard', true) = '1' then return new; end if;
 
-  if r = 'member' then
+  if r = 'member' or (r = 'manager' and old.member_id = auth.uid()) then
     new.possible_links := old.possible_links; new.target_url := old.target_url;
     new.anchor_text := old.anchor_text; new.reject_reason := old.reject_reason;
     new.their_link_live := old.their_link_live; new.paid_date := old.paid_date;
@@ -206,6 +206,14 @@ begin
   update public.domains set member_name = trim(n) where member_id = auth.uid();
 end $$;
 
+create or replace function public.set_user_role(p_id uuid, p_role text) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  if public.auth_role() <> 'manager' then raise exception 'Not allowed'; end if;
+  if p_role not in ('member','boss') then raise exception 'Invalid role'; end if;
+  update public.profiles set role = p_role where id = p_id and role <> 'manager';
+end $$;
+
 create or replace function public.add_next_link(p_id uuid, p_target text, p_anchor text, p_price numeric)
 returns void language plpgsql security definer set search_path = public as $$
 declare w public.websites%rowtype;
@@ -265,8 +273,8 @@ create policy websites_read on public.websites for select to authenticated
 create policy websites_insert on public.websites for insert to authenticated
   with check (public.auth_role() = 'manager' or (public.auth_role() = 'member' and member_id = auth.uid()));
 create policy websites_update on public.websites for update to authenticated
-  using (public.auth_role() = 'boss' or (public.auth_role() = 'member' and member_id = auth.uid()))
-  with check (public.auth_role() = 'boss' or (public.auth_role() = 'member' and member_id = auth.uid()));
+  using (public.auth_role() = 'boss' or (public.auth_role() in ('member','manager') and member_id = auth.uid()))
+  with check (public.auth_role() = 'boss' or (public.auth_role() in ('member','manager') and member_id = auth.uid()));
 create policy websites_delete on public.websites for delete to authenticated
   using (public.auth_role() in ('manager','boss') or (public.auth_role() = 'member' and member_id = auth.uid()));
 
@@ -275,6 +283,7 @@ revoke all on all tables in schema public from anon;
 revoke execute on all functions in schema public from public, anon;
 grant execute on function public.auth_role() to authenticated;
 grant execute on function public.set_my_name(text) to authenticated;
+grant execute on function public.set_user_role(uuid, text) to authenticated;
 grant execute on function public.add_next_link(uuid, text, text, numeric) to authenticated;
 
 -- ---------- Realtime ----------
