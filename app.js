@@ -567,6 +567,17 @@ const forms = {
     patch.anchor_text = txt(d.get('anchor_text')); patch.reject_reason = txt(d.get('reject_reason'));
     return upd(w.id, patch, 'Saved');
   },
+  async rolepw(f, d) {
+    const pr = S.pendingRole;
+    if (!pr) return closeDrawer();
+    const check = window.supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY, { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false } });
+    const { error: pe } = await check.auth.signInWithPassword({ email: S.session.user.email, password: d.get('password') });
+    if (pe) return toast('Wrong password', 'err');
+    const { error } = await sb.rpc('set_user_role', { p_id: pr.id, p_role: pr.role });
+    S.pendingRole = null; closeDrawer();
+    if (error) { toast(errMsg(error), 'err'); return refreshSoon(); }
+    toast('Role updated'); await loadData(); render();
+  },
   async invite(f, d) {
     const email = txt(d.get('email')).toLowerCase();
     if (S.people.some(p => (p.email || '').toLowerCase() === email)) return toast('That user already has an account', 'err');
@@ -612,10 +623,14 @@ const changes = {
     r.onload = () => { const ta = $('textarea[name=rows]'); if (ta) ta.value = String(r.result).replace(/^\uFEFF/, ''); toast(`Loaded ${file.name}. Check the rows, then click Import.`); };
     r.readAsText(file);
   },
-  async userrole(t) {
-    const { error } = await sb.rpc('set_user_role', { p_id: t.dataset.id, p_role: t.value });
-    if (error) { toast(errMsg(error), 'err'); return refreshSoon(); }
-    toast('Role updated'); await loadData(); render();
+  userrole(t) {
+    const p = S.people.find(x => x.id === t.dataset.id);
+    const role = t.value;
+    t.value = p ? p.role : role;
+    S.pendingRole = { id: t.dataset.id, role };
+    openDrawer('Confirm your password', `<form data-form="rolepw"><p class="hint">Changing ${esc(p ? (p.name || p.email) : 'this user')} to <b>${role === 'boss' ? 'Director' : 'Team member'}</b>. Enter your password to confirm.</p>
+      <label>Your password</label><input type="password" name="password" required autocomplete="current-password" autofocus>
+      <div style="margin-top:14px"><button class="btn primary" type="submit">Confirm change</button></div></form>`, 'confirm');
   },
   async myname(t) {
     const n = t.value.trim();
