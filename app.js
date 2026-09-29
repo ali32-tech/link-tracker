@@ -7,7 +7,7 @@ const $ = (s, r = document) => r.querySelector(s);
 
 // ---------- constants & helpers ----------
 const ST = {
-  boss_review: { label: 'Boss Review', cls: 'amber' },
+  boss_review: { label: 'Under Review', cls: 'amber' },
   approved: { label: 'Approved', cls: 'blue' },
   rejected: { label: 'Rejected', cls: 'red' },
   link_ready: { label: 'Link Ready', cls: 'violet' },
@@ -118,14 +118,36 @@ async function upd(id, patch, msg) {
 }
 
 // ---------- auth flow ----------
-function showLogin(message) {
+function showLogin(message, kind) {
   S.profile = null;
-  app.innerHTML = `<div class="center"><div class="panel">
-    <h1>Link Placement Tracker</h1><p>Sign in with your email. We'll send you a magic link.</p>
-    <form data-form="login"><label>Email</label>
-    <input type="email" name="email" required autocomplete="email" placeholder="you@example.com">
-    <div style="margin-top:14px"><button class="btn primary big" type="submit">Send magic link</button></div></form>
-    ${message ? `<p style="margin-top:14px;color:var(--accent)">${esc(message)}</p>` : ''}</div></div>`;
+  const m = S.mode || 'in';
+  const titles = { in: ['Welcome back', 'Sign in to your workspace.'], up: ['Create your account', 'Use the email your team invited.'], magic: ['Email me a link', "We'll send a one-click sign-in link."], reset: ['Reset password', "We'll email you a reset link."] };
+  const pw = (label, ac) => `<label>${label}</label><div class="pwrow"><input type="password" name="password" required minlength="6" autocomplete="${ac}" placeholder="At least 6 characters"><button type="button" class="btn sm" data-act="showpw" tabindex="-1">Show</button></div>`;
+  const email = `<label>Email</label><input type="email" name="email" required autocomplete="email" placeholder="you@example.com" autofocus>`;
+  const form = {
+    in: `<form data-form="login">${email}${pw('Password', 'current-password')}<div class="authlinks"><a href="#" data-act="mode" data-v="reset">Forgot password?</a></div>
+      <button class="btn primary big" type="submit">Sign in</button></form>
+      <div class="or"><span>or</span></div><button class="btn big" data-act="mode" data-v="magic" type="button">Email me a sign-in link</button>
+      <p class="switch">New here? <a href="#" data-act="mode" data-v="up">Create an account</a></p>`,
+    up: `<form data-form="signup">${email}${pw('Choose a password', 'new-password')}<button class="btn primary big" type="submit" style="margin-top:14px">Create account</button></form>
+      <p class="switch">Already have an account? <a href="#" data-act="mode" data-v="in">Sign in</a></p>`,
+    magic: `<form data-form="magic">${email}<button class="btn primary big" type="submit" style="margin-top:14px">Send sign-in link</button></form>
+      <p class="switch"><a href="#" data-act="mode" data-v="in">Back to sign in</a></p>`,
+    reset: `<form data-form="reset">${email}<button class="btn primary big" type="submit" style="margin-top:14px">Send reset link</button></form>
+      <p class="switch"><a href="#" data-act="mode" data-v="in">Back to sign in</a></p>`,
+  }[m];
+  app.innerHTML = `<div class="auth"><aside class="auth-side"><img src="flipbite-logo.png" alt="FlipBite"><h2>FlipBite<br>Link Tracker</h2>
+      <p>Every website, every link, every payout in one place.</p>
+      <ul><li>Live status from outreach to paid</li><li>Duplicate websites caught instantly</li><li>Updates in real time for the whole team</li></ul></aside>
+    <main class="auth-main"><div class="auth-card"><img class="auth-logo" src="flipbite-logo.png" alt="FlipBite">
+      <h1>${titles[m][0]}</h1><p class="lead">${titles[m][1]}</p>
+      ${message ? `<div class="notice ${kind === 'err' ? 'err' : ''}">${esc(message)}</div>` : ''}${form}</div></main></div>`;
+}
+
+function showNewPassword() {
+  app.innerHTML = `<div class="center"><div class="panel"><img src="flipbite-logo.png" alt="FlipBite" style="width:56px;height:56px;display:block;margin-bottom:8px"><h1>Set a new password</h1>
+    <form data-form="newpw"><label>New password</label><input type="password" name="password" required minlength="6" autocomplete="new-password" autofocus>
+    <div style="margin-top:14px"><button class="btn primary big" type="submit">Save password</button></div></form></div></div>`;
 }
 
 function showName() {
@@ -150,14 +172,14 @@ function header() {
   const e = S.profile;
   let previewSel = '';
   if (e.role === 'manager') {
-    const opt = r => S.people.filter(p => p.role === r).map(p => `<option value="${p.id}" ${S.preview && S.preview.id === p.id ? 'selected' : ''}>${esc(p.name || p.email)} (${r})</option>`).join('');
+    const opt = r => S.people.filter(p => p.role === r).map(p => `<option value="${p.id}" ${S.preview && S.preview.id === p.id ? 'selected' : ''}>${esc(p.name || p.email)}</option>`).join('');
     previewSel = `<select data-change="preview" style="width:auto" aria-label="Preview as"><option value="">Preview as…</option>${opt('boss')}${opt('member')}</select>`;
   }
-  return `<div class="top"><div class="brand"><i></i>Link Placement Tracker</div>
-    ${previewSel}<span class="who">${esc(e.name)}</span><span class="tag">${e.role}</span>
+  return `<div class="top"><a class="brand" href="./" style="text-decoration:none"><img src="flipbite-logo.png" alt="FlipBite">FlipBite <b>Link Tracker</b></a>
+    ${previewSel}${S.preview ? `<span class="tag">${esc(e.name)}</span>` : `<input class="myname" data-change="myname" value="${esc(e.name)}" maxlength="60" aria-label="Your name (click to edit)" title="Click to edit your name">`}
     <button class="btn sm" data-act="theme" aria-label="Toggle dark mode">Theme</button>
     <button class="btn sm" data-act="logout">Sign out</button></div>
-    ${S.preview ? `<div class="banner">Previewing as <b>${esc(S.preview.name || S.preview.email)}</b> (${S.preview.role}). Read-only.
+    ${S.preview ? `<div class="banner">Previewing as <b>${esc(S.preview.name || S.preview.email)}</b> Read-only.
       <button class="btn sm" data-act="exitpreview">Exit preview</button></div>` : ''}`;
 }
 
@@ -207,7 +229,8 @@ function openDetail(id) {
       <div><label>Reject reason</label><select name="reject_reason"><option value=""></option>${REJECT_REASONS.map(r => `<option ${w.reject_reason === r ? 'selected' : ''}>${r}</option>`).join('')}</select></div></div>
       <label>Target URL</label><input name="target_url" value="${esc(w.target_url || '')}">
       <label>Anchor text</label><input name="anchor_text" value="${esc(w.anchor_text || '')}">
-      <div style="margin-top:14px"><button class="btn primary big" type="submit" ${readOnly() ? 'disabled' : ''}>Save changes</button></div></form>`;
+      <div style="margin-top:14px"><button class="btn primary big" type="submit" ${readOnly() ? 'disabled' : ''}>Save changes</button></div></form>
+      <div class="btns" style="margin-top:14px"><button class="btn danger" data-act="del" data-id="${w.id}">Delete website</button></div>`;
   }
   openDrawer(w.domain, detailHtml(w) + extra, 'detail', w.id);
 }
@@ -231,7 +254,7 @@ function managerSites() {
       <select data-change="mmember"><option value="">All members</option>${members.map(m => `<option value="${m.id}" ${f.member === m.id ? 'selected' : ''}>${esc(m.name || m.email)}</option>`).join('')}</select>
       <select data-change="mdeal"><option value="">All deals</option><option value="exchange" ${f.deal === 'exchange' ? 'selected' : ''}>Exchange</option><option value="paid" ${f.deal === 'paid' ? 'selected' : ''}>Paid</option></select>
       ${f.status || f.member || f.deal || f.q ? '<button class="btn sm" data-act="clearf">Clear filters</button>' : ''}</div>
-    <div class="btns" style="margin-bottom:12px"><button class="btn primary" data-act="whatsapp">Copy WhatsApp message for Boss</button>
+    <div class="btns" style="margin-bottom:12px"><button class="btn primary" data-act="whatsapp">Copy WhatsApp message</button>
       <button class="btn" data-act="import">Import</button><button class="btn" data-act="export">Export CSV</button></div>
     ${rows.length ? `<div class="tablewrap"><table><thead><tr><th>Website</th><th>Member</th><th>Deal</th><th class="num">Price</th><th>DA / Traffic</th><th class="num">Links</th><th>Status</th><th>Updated</th></tr></thead><tbody>
       ${rows.map(w => `<tr data-act="open" data-id="${w.id}"><td><b>${esc(w.domain)}</b></td><td>${esc(memberName(w.member_id))}</td><td>${dealLabel(w.deal_type)}</td>
@@ -255,26 +278,22 @@ function commissionView() {
   const sum = k => rows.reduce((a, r) => a + r[k], 0);
   const label = new Date(ym + '-01T00:00').toLocaleString(undefined, { month: 'long', year: 'numeric' });
   return `<div class="toolbar"><label style="margin:0">Month</label><input type="month" style="width:auto" value="${ym}" data-change="month"></div>
-    <div class="stats"><div class="stat"><b>${money(sum('boss'))}</b><span>From Boss</span></div><div class="stat"><b>${money(sum('team'))}</b><span>To team</span></div>
+    <div class="stats"><div class="stat"><b>${money(sum('boss'))}</b><span>Client rate total</span></div><div class="stat"><b>${money(sum('team'))}</b><span>To team</span></div>
     <div class="stat hot"><b>${money(sum('share'))}</b><span>Your share</span></div><div class="stat"><b>${sum('live')}</b><span>Live links</span></div></div>
-    <p class="sub" style="margin-top:12px">${label}: ${money(sum('boss'))} from Boss, ${money(sum('team'))} to team, your share ${money(sum('share'))}.</p>
-    ${rows.length ? `<div class="tablewrap"><table><thead><tr><th>Member</th><th class="num">Websites</th><th class="num">Approved+</th><th class="num">Rejected</th><th class="num">Live links</th><th class="num">Team payout</th><th class="num">From Boss</th><th class="num">My share</th></tr></thead><tbody>
+    <p class="sub" style="margin-top:12px">${label}: ${money(sum('boss'))} from client rate, ${money(sum('team'))} to team, your share ${money(sum('share'))}.</p>
+    ${rows.length ? `<div class="tablewrap"><table><thead><tr><th>Member</th><th class="num">Websites</th><th class="num">Approved+</th><th class="num">Rejected</th><th class="num">Live links</th><th class="num">Team payout</th><th class="num">Client rate</th><th class="num">My share</th></tr></thead><tbody>
       ${rows.map(r => `<tr><td><b>${esc(r.m.name || r.m.email)}</b></td><td class="num">${r.total}</td><td class="num">${r.approved}</td><td class="num">${r.rejected}</td><td class="num">${r.live}</td><td class="num">${money(r.team)}</td><td class="num">${money(r.boss)}</td><td class="num">${money(r.share)}</td></tr>`).join('')}</tbody>
       <tfoot><tr><td>Total</td><td class="num">${sum('total')}</td><td class="num">${sum('approved')}</td><td class="num">${sum('rejected')}</td><td class="num">${sum('live')}</td><td class="num">${money(sum('team'))}</td><td class="num">${money(sum('boss'))}</td><td class="num">${money(sum('share'))}</td></tr></tfoot></table></div>`
       : '<div class="empty">No team members yet. Invite them in Settings.</div>'}`;
 }
 
 function settingsView() {
-  const url = location.origin + location.pathname;
   return `<h2>Rates (per live link)</h2><form data-form="rates" style="max-width:420px">
     <div class="grid2"><div><label>Team rate ($)</label><input type="number" step="0.01" min="0" name="team_rate" value="${S.teamRate}" required></div>
-    <div><label>Boss rate ($)</label><input type="number" step="0.01" min="0" name="boss_rate" value="${S.bossRate}" required></div></div>
-    <p class="hint">The Boss rate is visible to you only.</p><button class="btn primary" type="submit">Save rates</button></form>
-    <h2>Invite a user</h2><form data-form="invite" style="max-width:420px"><div class="grid2"><div><label>Email</label><input type="email" name="email" required></div>
-    <div><label>Role</label><select name="role"><option value="member">Team member</option><option value="boss">Boss</option></select></div></div>
-    <p class="hint">After inviting, ask them to open ${esc(url)} and sign in with that email.</p><button class="btn primary" type="submit">Invite</button></form>
-    <h2>Team</h2>${S.people.length ? `<div class="tablewrap"><table><thead><tr><th>Name</th><th>Email</th><th>Role</th></tr></thead><tbody>${S.people.map(p => `<tr><td>${esc(p.name || '—')}</td><td>${esc(p.email)}</td><td>${p.role}</td></tr>`).join('')}
-      ${S.invites.map(i => `<tr><td><i>Invited</i></td><td>${esc(i.email)}</td><td>${i.role} <button class="btn sm danger" data-act="rminvite" data-v="${esc(i.email)}">Remove</button></td></tr>`).join('')}</tbody></table></div>` : ''}`;
+    <div><label>Client rate ($)</label><input type="number" step="0.01" min="0" name="boss_rate" value="${S.bossRate}" required></div></div>
+    <p class="hint">The client rate is visible to you only.</p><button class="btn primary" type="submit">Save rates</button></form>
+    <h2>Team</h2>${S.people.length ? `<div class="tablewrap"><table><thead><tr><th>Name</th><th>Email</th></tr></thead><tbody>${S.people.map(p => `<tr><td>${esc(p.name || '—')}</td><td>${esc(p.email)}</td></tr>`).join('')}
+      ${S.invites.map(i => `<tr><td><i>Invited</i></td><td>${esc(i.email)}</td><td><button class="btn sm danger" data-act="rminvite" data-v="${esc(i.email)}">Remove</button></td></tr>`).join('')}</tbody></table></div>` : ''}`;
 }
 
 function whatsappText() {
@@ -351,7 +370,7 @@ function memberView() {
     live: w => LIVE_STATUSES.includes(w.status), rejected: w => w.status === 'rejected',
   }[f];
   const list = ws.filter(w => filt(w) && (!q || w.domain.includes(q)));
-  const chips = [['all', 'All'], ['action', 'Action needed'], ['boss', 'With Boss'], ['live', 'Live'], ['rejected', 'Rejected']];
+  const chips = [['all', 'All'], ['action', 'Action needed'], ['boss', 'Under review'], ['live', 'Live'], ['rejected', 'Rejected']];
   return `<div class="stats"><div class="stat"><b>${ws.length}</b><span>My websites</span></div>
     <div class="stat ${ws.filter(needsAction).length ? 'hot' : ''}"><b>${ws.filter(needsAction).length}</b><span>Action needed</span></div>
     <div class="stat"><b>${live}</b><span>Live this month</span></div><div class="stat"><b>${money(live * S.teamRate)}</b><span>My earnings this month</span></div></div>
@@ -373,9 +392,9 @@ function memberCard(w) {
     next = `<div class="next"><span>Waiting for the website to publish it.</span><button class="btn primary big" data-act="livebtn" data-id="${w.id}">Link is live</button></div>`;
   } else {
     const t = {
-      boss_review: 'Boss is reviewing', approved: "Waiting for Boss's link", rejected: 'Rejected: ' + (w.reject_reason || 'no reason given'),
-      invoice_received: 'Invoice with Boss', paid: 'Paid',
-      live: w.deal_type === 'exchange' ? (w.their_link_live ? 'Live. Exchange complete' : 'Live. Boss is placing the exchange link') : 'Live. Boss is handling the invoice',
+      boss_review: 'Under review', approved: "Waiting for the link", rejected: 'Rejected: ' + (w.reject_reason || 'no reason given'),
+      invoice_received: 'Invoice received', paid: 'Paid',
+      live: w.deal_type === 'exchange' ? (w.their_link_live ? 'Live. Exchange complete' : 'Live. Waiting for the exchange link') : 'Live. Invoice in progress',
     }[w.status];
     next = `<div class="next">${esc(t)}</div>`;
   }
@@ -399,7 +418,8 @@ function siteForm(w) {
 }
 
 function copyMessage(w) {
-  return `Hi,\n\nThanks for agreeing to place a link to our site. Please add this link to your page:\n\nURL: ${w.target_url}\nAnchor text: ${w.anchor_text}\n\nHTML: <a href="${w.target_url}">${w.anchor_text}</a>\n\nPlease send me the live page URL once it's published. Thank you!`;
+  return `URL: ${w.target_url}
+Anchor text: ${w.anchor_text}`;
 }
 
 // ---------- render ----------
@@ -418,6 +438,8 @@ const site = id => S.sites.find(w => w.id === id);
 const linkFields = `<label>Target URL</label><input name="target_url" required placeholder="https://client-site.com/page"><label>Anchor text</label><input name="anchor_text" required>`;
 
 const actions = {
+  mode: el => { S.mode = el.dataset.v; showLogin(); },
+  showpw: el => { const i = el.previousElementSibling; i.type = i.type === 'password' ? 'text' : 'password'; el.textContent = i.type === 'password' ? 'Show' : 'Hide'; },
   logout: async () => { if (S.chan) sb.removeChannel(S.chan); await sb.auth.signOut(); },
   theme: () => {
     const cur = document.documentElement.dataset.theme || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
@@ -476,10 +498,28 @@ const actions = {
 
 const forms = {
   async login(f, d) {
-    const email = txt(d.get('email'));
-    const { error } = await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: location.origin + location.pathname } });
-    if (error) return toast(/database|not been invited|signups/i.test(error.message) ? "This email hasn't been invited yet. Ask the Manager." : error.message, 'err');
+    const { error } = await sb.auth.signInWithPassword({ email: txt(d.get('email')), password: d.get('password') });
+    if (error) showLogin(/invalid/i.test(error.message) ? 'Wrong email or password.' : error.message, 'err');
+  },
+  async signup(f, d) {
+    const { data, error } = await sb.auth.signUp({ email: txt(d.get('email')), password: d.get('password'), options: { emailRedirectTo: location.origin + location.pathname } });
+    if (error) return showLogin(/database|not been invited|signups/i.test(error.message) ? "This email hasn't been invited yet. Ask your manager." : error.message, 'err');
+    if (!data.session) { S.mode = 'in'; showLogin('Account created. Check your email to confirm it, then sign in.'); }
+  },
+  async magic(f, d) {
+    const { error } = await sb.auth.signInWithOtp({ email: txt(d.get('email')), options: { emailRedirectTo: location.origin + location.pathname } });
+    if (error) return showLogin(/database|not been invited|signups/i.test(error.message) ? "This email hasn't been invited yet. Ask your manager." : error.message, 'err');
     showLogin('Check your email for the sign-in link.');
+  },
+  async reset(f, d) {
+    const { error } = await sb.auth.resetPasswordForEmail(txt(d.get('email')), { redirectTo: location.origin + location.pathname });
+    if (error) return showLogin(error.message, 'err');
+    S.mode = 'in'; showLogin('If that email has an account, a reset link is on its way.');
+  },
+  async newpw(f, d) {
+    const { error } = await sb.auth.updateUser({ password: d.get('password') });
+    if (error) return toast(error.message, 'err');
+    S.recovery = false; toast('Password updated'); boot();
   },
   async name(f, d) {
     const { error } = await sb.rpc('set_my_name', { n: d.get('name') });
@@ -493,7 +533,7 @@ const forms = {
     const id = f.dataset.id;
     const { error } = id ? await sb.from('websites').update(row).eq('id', id) : await sb.from('websites').insert({ ...row, member_id: S.profile.id });
     if (error) return toast(errMsg(error), 'err');
-    toast(id ? 'Saved' : 'Website added. Boss will review it.'); closeDrawer(); refreshSoon();
+    toast(id ? 'Saved' : 'Website added. It will be reviewed.'); closeDrawer(); refreshSoon();
   },
   live: (f, d) => upd(f.dataset.id, { status: 'live', live_url: txt(d.get('live_url')), their_link: txt(d.get('their_link')), invoice_url: txt(d.get('invoice_url')) }, 'Status: Live'),
   approve: (f, d) => upd(f.dataset.id, { status: 'approved', possible_links: num(d.get('possible_links')) }, 'Status: Approved'),
@@ -520,13 +560,6 @@ const forms = {
     S.teamRate = num(d.get('team_rate')); S.bossRate = num(d.get('boss_rate'));
     toast('Rates saved'); render();
   },
-  async invite(f, d) {
-    const email = String(d.get('email')).trim().toLowerCase();
-    if (S.people.some(p => p.email === email)) return toast('That person already has an account', 'err');
-    const { error } = await sb.from('invites').upsert({ email, role: d.get('role') });
-    if (error) return toast(errMsg(error), 'err');
-    toast('Invited. Ask them to sign in with that email.'); f.reset(); await loadData(); render();
-  },
   async import(f, d) {
     const members = S.people.filter(p => p.role === 'member');
     const seen = new Set(S.sites.map(w => w.domain));
@@ -551,6 +584,13 @@ const forms = {
 };
 
 const changes = {
+  async myname(t) {
+    const n = t.value.trim();
+    if (!n || n === S.profile.name) { t.value = S.profile.name; return; }
+    const { error } = await sb.rpc('set_my_name', { n });
+    if (error) { t.value = S.profile.name; return toast(errMsg(error), 'err'); }
+    S.profile.name = n; toast('Name updated'); refreshSoon();
+  },
   preview: t => { S.preview = t.value ? S.people.find(p => p.id === t.value) : null; render(); },
   mmember: t => { S.mf.member = t.value; render(); },
   mdeal: t => { S.mf.deal = t.value; render(); },
@@ -611,7 +651,9 @@ if (!CFG.SUPABASE_URL || CFG.SUPABASE_URL.startsWith('YOUR_') || !window.supabas
   sb = window.supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY);
   sb.auth.onAuthStateChange((event, session) => {
     S.session = session;
+    if (event === 'PASSWORD_RECOVERY') { S.recovery = true; showNewPassword(); return; }
     if (!session) { if (S.chan) sb.removeChannel(S.chan); S.chan = null; S.preview = null; showLogin(); return; }
+    if (S.recovery) return;
     if (event === 'INITIAL_SESSION' || (event === 'SIGNED_IN' && !S.profile)) setTimeout(boot, 0);
   });
 }

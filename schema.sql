@@ -148,7 +148,7 @@ begin
     new.live_date := old.live_date; new.link_history := old.link_history;
     if new.status is distinct from old.status
        and new.status not in ('boss_review','approved','rejected','link_ready','invoice_received','paid') then
-      raise exception 'The Boss cannot set this status';
+      raise exception 'The Director cannot set this status';
     end if;
     if new.status in ('approved','link_ready') and coalesce(new.possible_links, 0) < 1 then
       raise exception 'Possible links is required';
@@ -268,7 +268,7 @@ create policy websites_update on public.websites for update to authenticated
   using (public.auth_role() = 'boss' or (public.auth_role() = 'member' and member_id = auth.uid()))
   with check (public.auth_role() = 'boss' or (public.auth_role() = 'member' and member_id = auth.uid()));
 create policy websites_delete on public.websites for delete to authenticated
-  using (public.auth_role() = 'manager' or (public.auth_role() = 'member' and member_id = auth.uid()));
+  using (public.auth_role() in ('manager','boss') or (public.auth_role() = 'member' and member_id = auth.uid()));
 
 -- ---------- Privileges ----------
 revoke all on all tables in schema public from anon;
