@@ -1,0 +1,618 @@
+(() => {
+'use strict';
+
+const CFG = window.TRACKER_CONFIG || {};
+const app = document.getElementById('app');
+const $ = (s, r = document) => r.querySelector(s);
+
+// ---------- constants & helpers ----------
+const ST = {
+  boss_review: { label: 'Boss Review', cls: 'amber' },
+  approved: { label: 'Approved', cls: 'blue' },
+  rejected: { label: 'Rejected', cls: 'red' },
+  link_ready: { label: 'Link Ready', cls: 'violet' },
+  sent: { label: 'Sent to Website', cls: 'blue' },
+  live: { label: 'Live', cls: 'green' },
+  invoice_received: { label: 'Invoice Received', cls: 'amber' },
+  paid: { label: 'Paid', cls: 'green' },
+};
+const BOSS_STATUSES = ['boss_review', 'approved', 'rejected', 'link_ready', 'invoice_received', 'paid'];
+const LIVE_STATUSES = ['live', 'invoice_received', 'paid'];
+const REJECT_REASONS = ['Already has our link', "Don't like it", 'Too expensive', 'Low traffic', 'Other'];
+
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const normDomain = u => String(u || '').trim().toLowerCase().replace(/^[a-z][a-z0-9+.-]*:\/\//, '').replace(/^www\./, '').replace(/[/?#:].*$/, '');
+const money = n => (n == null || n === '' ? '—' : '$' + Number(n).toLocaleString(undefined, { maximumFractionDigits: 2 }));
+const num = v => { v = String(v ?? '').trim(); return v === '' || isNaN(+v) ? null : +v; };
+const txt = v => { v = String(v ?? '').trim(); return v === '' ? null : v; };
+const dealLabel = d => (d === 'paid' ? 'Paid' : 'Exchange');
+const pill = w => `<span class="pill ${ST[w.status].cls}">${ST[w.status].label}</span>`;
+const href = u => (/^https?:\/\//i.test(u) ? u : 'https://' + u);
+const lnk = u => (u ? `<a href="${esc(href(u))}" target="_blank" rel="noopener">${esc(u.replace(/^https?:\/\/(www\.)?/i, '').slice(0, 60))}</a>` : '—');
+const ymNow = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; };
+const hist = w => w.link_history || [];
+const linkNo = w => hist(w).length + 1;
+const roundDone = w => (w.deal_type === 'paid' && w.status === 'paid') || (w.deal_type === 'exchange' && w.status === 'live' && w.their_link_live);
+const nextPossible = w => roundDone(w) && linkNo(w) < (w.possible_links || 0);
+const liveCount = (w, ym) =>
+  (LIVE_STATUSES.includes(w.status) && (w.live_date || '').startsWith(ym) ? 1 : 0) +
+  hist(w).filter(h => (h.live_date || '').startsWith(ym)).length;
+const errMsg = e => (e && e.code === '23505' ? 'This website is already in the tracker.' : (e && e.message) || 'Something went wrong');
+
+const S = {
+  session: null, profile: null, sites: [], people: [], invites: [], teamRate: 7, bossRate: 10,
+  tab: 'websites', mf: { status: '', member: '', deal: '', q: '' }, mem: { f: 'all', q: '' }, bossQ: '',
+  month: ymNow(), preview: null, drawer: null, chan: null,
+};
+let sb = null, armed = null, refreshTimer = null;
+
+function toast(msg, kind) {
+  const t = document.createElement('div');
+  t.className = 'toast' + (kind === 'err' ? ' err' : '');
+  t.textContent = msg;
+  $('#toasts').appendChild(t);
+  setTimeout(() => t.remove(), 3200);
+}
+
+async function copy(text) {
+  try { await navigator.clipboard.writeText(text); }
+  catch (e) {
+    const ta = document.createElement('textarea'); ta.value = text; document.body.appendChild(ta);
+    ta.select(); document.execCommand('copy'); ta.remove();
+  }
+  toast('Copied');
+}
+
+// ---------- effective user (supports Manager "Preview as…") ----------
+const eff = () => (S.preview ? S.preview : S.profile);
+const readOnly = () => !!S.preview;
+const visibleSites = () => (eff().role === 'member' ? S.sites.filter(w => w.member_id === eff().id) : S.sites);
+const memberName = id => {
+  if (S.profile && id === S.profile.id) return S.profile.name || S.profile.email;
+  const p = S.people.find(x => x.id === id);
+  return p ? p.name || p.email : 'Unknown';
+};
+
+// ---------- data ----------
+async function loadData() {
+  const role = S.profile.role;
+  const jobs = [sb.from('websites').select('*').order('updated_at', { ascending: false })];
+  if (role !== 'boss') jobs.push(sb.from('settings').select('team_rate').maybeSingle());
+  if (role !== 'member') jobs.push(sb.from('profiles').select('id,name,email,role'));
+  if (role === 'manager') {
+    jobs.push(sb.from('private_settings').select('boss_rate').maybeSingle());
+    jobs.push(sb.from('invites').select('*').order('created_at', { ascending: false }));
+  }
+  const res = await Promise.all(jobs);
+  const w = res.shift();
+  if (w.error) return toast(errMsg(w.error), 'err');
+  S.sites = w.data;
+  if (role !== 'boss') { const s = res.shift(); if (s.data) S.teamRate = +s.data.team_rate; }
+  if (role !== 'member') S.people = res.shift().data || [];
+  if (role === 'manager') {
+    const b = res.shift(); if (b.data) S.bossRate = +b.data.boss_rate;
+    S.invites = res.shift().data || [];
+  }
+}
+
+function refreshSoon() {
+  clearTimeout(refreshTimer);
+  refreshTimer = setTimeout(async () => {
+    if (!S.profile) return;
+    await loadData();
+    render();
+    if (S.drawer && S.drawer.kind === 'detail') {
+      const w = S.sites.find(x => x.id === S.drawer.id);
+      w ? openDetail(w.id) : closeDrawer();
+    }
+  }, 200);
+}
+
+async function upd(id, patch, msg) {
+  const { error } = await sb.from('websites').update(patch).eq('id', id);
+  if (error) return toast(errMsg(error), 'err'), false;
+  toast(msg || 'Saved');
+  closeDrawer();
+  refreshSoon();
+  return true;
+}
+
+// ---------- auth flow ----------
+function showLogin(message) {
+  S.profile = null;
+  app.innerHTML = `<div class="center"><div class="panel">
+    <h1>Link Placement Tracker</h1><p>Sign in with your email. We'll send you a magic link.</p>
+    <form data-form="login"><label>Email</label>
+    <input type="email" name="email" required autocomplete="email" placeholder="you@example.com">
+    <div style="margin-top:14px"><button class="btn primary big" type="submit">Send magic link</button></div></form>
+    ${message ? `<p style="margin-top:14px;color:var(--accent)">${esc(message)}</p>` : ''}</div></div>`;
+}
+
+function showName() {
+  app.innerHTML = `<div class="center"><div class="panel"><h1>Welcome</h1><p>What name should we show for you?</p>
+    <form data-form="name"><label>Display name</label><input name="name" required maxlength="60" autofocus>
+    <div style="margin-top:14px"><button class="btn primary big" type="submit">Continue</button></div></form></div></div>`;
+}
+
+async function boot() {
+  const { data: p, error } = await sb.from('profiles').select('*').eq('id', S.session.user.id).maybeSingle();
+  if (error || !p) { app.innerHTML = `<div class="center"><div class="panel"><h1>No access</h1><p>Your account has no profile yet. Ask the Manager to invite ${esc(S.session.user.email)}.</p><button class="btn" data-act="logout">Sign out</button></div></div>`; return; }
+  S.profile = p;
+  if (!p.name) return showName();
+  await loadData();
+  if (S.chan) sb.removeChannel(S.chan);
+  S.chan = sb.channel('websites-live').on('postgres_changes', { event: '*', schema: 'public', table: 'websites' }, refreshSoon).subscribe();
+  render();
+}
+
+// ---------- shared UI pieces ----------
+function header() {
+  const e = S.profile;
+  let previewSel = '';
+  if (e.role === 'manager') {
+    const opt = r => S.people.filter(p => p.role === r).map(p => `<option value="${p.id}" ${S.preview && S.preview.id === p.id ? 'selected' : ''}>${esc(p.name || p.email)} (${r})</option>`).join('');
+    previewSel = `<select data-change="preview" style="width:auto" aria-label="Preview as"><option value="">Preview as…</option>${opt('boss')}${opt('member')}</select>`;
+  }
+  return `<div class="top"><div class="brand"><i></i>Link Placement Tracker</div>
+    ${previewSel}<span class="who">${esc(e.name)}</span><span class="tag">${e.role}</span>
+    <button class="btn sm" data-act="theme" aria-label="Toggle dark mode">Theme</button>
+    <button class="btn sm" data-act="logout">Sign out</button></div>
+    ${S.preview ? `<div class="banner">Previewing as <b>${esc(S.preview.name || S.preview.email)}</b> (${S.preview.role}). Read-only.
+      <button class="btn sm" data-act="exitpreview">Exit preview</button></div>` : ''}`;
+}
+
+function kvRows(rows) {
+  return `<dl class="kv">${rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl>`;
+}
+
+function detailHtml(w) {
+  const rows = [
+    ['Website', lnk(w.url)], ['Member', esc(memberName(w.member_id))], ['Contact', esc(w.contact_email || '—')],
+    ['Deal', dealLabel(w.deal_type)], ['Price', money(w.price)], ['DA / Traffic', `${w.da ?? '—'} / ${w.traffic ?? '—'}`],
+    ['Status', pill(w)], ['Possible links', w.possible_links ?? '—'], ['Current link', `${linkNo(w)} / ${w.possible_links ?? '?'}`],
+    ['Target URL', lnk(w.target_url)], ['Anchor text', esc(w.anchor_text || '—')],
+  ];
+  if (w.status === 'rejected') rows.push(['Reject reason', esc(w.reject_reason || '—')]);
+  rows.push(['Live URL', lnk(w.live_url)]);
+  if (w.deal_type === 'exchange') rows.push(['Their link', `${lnk(w.their_link)}${w.their_link_live ? ' (live)' : ''}`]);
+  else rows.push(['Invoice', lnk(w.invoice_url)]);
+  rows.push(['Live date', w.live_date || '—'], ['Paid date', w.paid_date || '—'], ['Notes', esc(w.notes || '—')], ['Added', (w.created_at || '').slice(0, 10)]);
+  const h = hist(w).map((x, i) => `<div class="hist"><b>Link ${i + 1}</b> · ${esc(x.anchor_text || '')}<br>
+    Target: ${lnk(x.target_url)}<br>Live: ${lnk(x.live_url)} · ${esc(x.live_date || '')}
+    ${x.price != null ? `<br>Price: ${money(x.price)}` : ''}</div>`).join('');
+  return kvRows(rows) + (h ? `<h2 style="font-size:15px">Previous links</h2>${h}` : '');
+}
+
+function openDrawer(title, body, kind, id) {
+  S.drawer = { kind, id };
+  $('#drawer-root').innerHTML = `<div class="overlay" data-act="close"></div>
+    <aside class="drawer" role="dialog" aria-modal="true"><header><h3>${esc(title)}</h3>
+    <button class="x" data-act="close" aria-label="Close">×</button></header><div class="body">${body}</div></aside>`;
+}
+function closeDrawer() { S.drawer = null; $('#drawer-root').innerHTML = ''; }
+
+function openDetail(id) {
+  const w = S.sites.find(x => x.id === id);
+  if (!w) return;
+  const role = eff().role;
+  let extra = '';
+  if (role === 'manager') {
+    extra = `<div class="btns" style="margin-top:14px"><button class="btn danger" data-act="del" data-id="${w.id}">Delete</button></div>`;
+  } else if (role === 'boss') {
+    const sel = BOSS_STATUSES.includes(w.status) ? '' : `<option value="${w.status}" selected disabled>${ST[w.status].label} (current)</option>`;
+    extra = `<h2 style="font-size:15px">Correct a mistake</h2>
+      <form data-form="correct" data-id="${w.id}">
+      <label>Status</label><select name="status">${sel}${BOSS_STATUSES.map(s => `<option value="${s}" ${s === w.status ? 'selected' : ''}>${ST[s].label}</option>`).join('')}</select>
+      <div class="grid2"><div><label>Possible links</label><input type="number" min="1" name="possible_links" value="${w.possible_links ?? ''}"></div>
+      <div><label>Reject reason</label><select name="reject_reason"><option value=""></option>${REJECT_REASONS.map(r => `<option ${w.reject_reason === r ? 'selected' : ''}>${r}</option>`).join('')}</select></div></div>
+      <label>Target URL</label><input name="target_url" value="${esc(w.target_url || '')}">
+      <label>Anchor text</label><input name="anchor_text" value="${esc(w.anchor_text || '')}">
+      <div style="margin-top:14px"><button class="btn primary big" type="submit" ${readOnly() ? 'disabled' : ''}>Save changes</button></div></form>`;
+  }
+  openDrawer(w.domain, detailHtml(w) + extra, 'detail', w.id);
+}
+
+// ---------- Manager ----------
+function managerView() {
+  const tabs = [['websites', 'Websites'], ['commission', 'Commission'], ['settings', 'Settings']];
+  return `<div class="tabs">${tabs.map(([k, l]) => `<button class="tab ${S.tab === k ? 'on' : ''}" data-act="tab" data-v="${k}">${l}</button>`).join('')}</div>` +
+    (S.tab === 'commission' ? commissionView() : S.tab === 'settings' ? settingsView() : managerSites());
+}
+
+function managerSites() {
+  const f = S.mf, all = S.sites;
+  const counts = Object.fromEntries(Object.keys(ST).map(k => [k, all.filter(w => w.status === k).length]));
+  const q = f.q.trim().toLowerCase();
+  const rows = all.filter(w => (!f.status || w.status === f.status) && (!f.member || w.member_id === f.member) &&
+    (!f.deal || w.deal_type === f.deal) && (!q || w.domain.includes(q) || (w.contact_email || '').toLowerCase().includes(q)));
+  const members = S.people.filter(p => p.role === 'member');
+  return `<div class="pipe">${Object.keys(ST).map(k => `<button class="${f.status === k ? 'on' : ''}" data-act="pipe" data-v="${k}"><b>${counts[k]}</b><span>${ST[k].label}</span></button>`).join('')}</div>
+    <div class="toolbar"><input type="search" id="mq" placeholder="Search website or email" value="${esc(f.q)}" data-input="mq">
+      <select data-change="mmember"><option value="">All members</option>${members.map(m => `<option value="${m.id}" ${f.member === m.id ? 'selected' : ''}>${esc(m.name || m.email)}</option>`).join('')}</select>
+      <select data-change="mdeal"><option value="">All deals</option><option value="exchange" ${f.deal === 'exchange' ? 'selected' : ''}>Exchange</option><option value="paid" ${f.deal === 'paid' ? 'selected' : ''}>Paid</option></select>
+      ${f.status || f.member || f.deal || f.q ? '<button class="btn sm" data-act="clearf">Clear filters</button>' : ''}</div>
+    <div class="btns" style="margin-bottom:12px"><button class="btn primary" data-act="whatsapp">Copy WhatsApp message for Boss</button>
+      <button class="btn" data-act="import">Import</button><button class="btn" data-act="export">Export CSV</button></div>
+    ${rows.length ? `<div class="tablewrap"><table><thead><tr><th>Website</th><th>Member</th><th>Deal</th><th class="num">Price</th><th>DA / Traffic</th><th class="num">Links</th><th>Status</th><th>Updated</th></tr></thead><tbody>
+      ${rows.map(w => `<tr data-act="open" data-id="${w.id}"><td><b>${esc(w.domain)}</b></td><td>${esc(memberName(w.member_id))}</td><td>${dealLabel(w.deal_type)}</td>
+      <td class="num">${money(w.price)}</td><td>${w.da ?? '—'} / ${w.traffic ?? '—'}</td><td class="num">${w.possible_links ? `${hist(w).length + (roundDone(w) ? 1 : 0)} / ${w.possible_links}` : '—'}</td>
+      <td>${pill(w)}</td><td>${(w.updated_at || '').slice(0, 10)}</td></tr>`).join('')}</tbody></table></div>`
+      : `<div class="empty">${all.length ? 'No websites match these filters.' : 'No websites yet. Team members add them when a site says yes, or use Import.'}</div>`}`;
+}
+
+function commissionView() {
+  const ym = S.month;
+  const members = S.people.filter(p => p.role === 'member');
+  const rows = members.map(m => {
+    const ws = S.sites.filter(w => w.member_id === m.id);
+    const live = ws.reduce((a, w) => a + liveCount(w, ym), 0);
+    return {
+      m, total: ws.length, approved: ws.filter(w => !['boss_review', 'rejected'].includes(w.status)).length,
+      rejected: ws.filter(w => w.status === 'rejected').length, live,
+      team: live * S.teamRate, boss: live * S.bossRate, share: live * (S.bossRate - S.teamRate),
+    };
+  });
+  const sum = k => rows.reduce((a, r) => a + r[k], 0);
+  const label = new Date(ym + '-01T00:00').toLocaleString(undefined, { month: 'long', year: 'numeric' });
+  return `<div class="toolbar"><label style="margin:0">Month</label><input type="month" style="width:auto" value="${ym}" data-change="month"></div>
+    <div class="stats"><div class="stat"><b>${money(sum('boss'))}</b><span>From Boss</span></div><div class="stat"><b>${money(sum('team'))}</b><span>To team</span></div>
+    <div class="stat hot"><b>${money(sum('share'))}</b><span>Your share</span></div><div class="stat"><b>${sum('live')}</b><span>Live links</span></div></div>
+    <p class="sub" style="margin-top:12px">${label}: ${money(sum('boss'))} from Boss, ${money(sum('team'))} to team, your share ${money(sum('share'))}.</p>
+    ${rows.length ? `<div class="tablewrap"><table><thead><tr><th>Member</th><th class="num">Websites</th><th class="num">Approved+</th><th class="num">Rejected</th><th class="num">Live links</th><th class="num">Team payout</th><th class="num">From Boss</th><th class="num">My share</th></tr></thead><tbody>
+      ${rows.map(r => `<tr><td><b>${esc(r.m.name || r.m.email)}</b></td><td class="num">${r.total}</td><td class="num">${r.approved}</td><td class="num">${r.rejected}</td><td class="num">${r.live}</td><td class="num">${money(r.team)}</td><td class="num">${money(r.boss)}</td><td class="num">${money(r.share)}</td></tr>`).join('')}</tbody>
+      <tfoot><tr><td>Total</td><td class="num">${sum('total')}</td><td class="num">${sum('approved')}</td><td class="num">${sum('rejected')}</td><td class="num">${sum('live')}</td><td class="num">${money(sum('team'))}</td><td class="num">${money(sum('boss'))}</td><td class="num">${money(sum('share'))}</td></tr></tfoot></table></div>`
+      : '<div class="empty">No team members yet. Invite them in Settings.</div>'}`;
+}
+
+function settingsView() {
+  const url = location.origin + location.pathname;
+  return `<h2>Rates (per live link)</h2><form data-form="rates" style="max-width:420px">
+    <div class="grid2"><div><label>Team rate ($)</label><input type="number" step="0.01" min="0" name="team_rate" value="${S.teamRate}" required></div>
+    <div><label>Boss rate ($)</label><input type="number" step="0.01" min="0" name="boss_rate" value="${S.bossRate}" required></div></div>
+    <p class="hint">The Boss rate is visible to you only.</p><button class="btn primary" type="submit">Save rates</button></form>
+    <h2>Invite a user</h2><form data-form="invite" style="max-width:420px"><div class="grid2"><div><label>Email</label><input type="email" name="email" required></div>
+    <div><label>Role</label><select name="role"><option value="member">Team member</option><option value="boss">Boss</option></select></div></div>
+    <p class="hint">After inviting, ask them to open ${esc(url)} and sign in with that email.</p><button class="btn primary" type="submit">Invite</button></form>
+    <h2>Team</h2>${S.people.length ? `<div class="tablewrap"><table><thead><tr><th>Name</th><th>Email</th><th>Role</th></tr></thead><tbody>${S.people.map(p => `<tr><td>${esc(p.name || '—')}</td><td>${esc(p.email)}</td><td>${p.role}</td></tr>`).join('')}
+      ${S.invites.map(i => `<tr><td><i>Invited</i></td><td>${esc(i.email)}</td><td>${i.role} <button class="btn sm danger" data-act="rminvite" data-v="${esc(i.email)}">Remove</button></td></tr>`).join('')}</tbody></table></div>` : ''}`;
+}
+
+function whatsappText() {
+  const rev = S.sites.filter(w => w.status === 'boss_review');
+  const inv = S.sites.filter(w => w.status === 'invoice_received');
+  const total = inv.reduce((a, w) => a + (+w.price || 0), 0);
+  const out = [];
+  out.push(rev.length ? `*Websites waiting for your review (${rev.length}):*\n` + rev.map((w, i) => `${i + 1}. ${w.domain} - ${dealLabel(w.deal_type)}${w.deal_type === 'paid' ? ' ' + money(w.price) : ''} - DA ${w.da ?? '?'}, traffic ${w.traffic ?? '?'} (${memberName(w.member_id)})`).join('\n') : 'No websites waiting for review.');
+  out.push(inv.length ? `*Invoices waiting for payment (${inv.length}, total ${money(total)}):*\n` + inv.map((w, i) => `${i + 1}. ${w.domain} - ${money(w.price)}${w.invoice_url ? ' - ' + w.invoice_url : ''}`).join('\n') : 'No invoices waiting for payment.');
+  return out.join('\n\n');
+}
+
+function csvExport() {
+  const cols = ['Domain', 'URL', 'Member', 'Contact email', 'Deal', 'Price', 'DA', 'Traffic', 'Status', 'Possible links', 'Links placed', 'Target URL', 'Anchor', 'Live URL', 'Their link', 'Invoice', 'Live date', 'Paid date', 'Notes', 'Added'];
+  const q = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
+  const lines = [cols.map(q).join(',')].concat(S.sites.map(w => [w.domain, w.url, memberName(w.member_id), w.contact_email, dealLabel(w.deal_type), w.price, w.da, w.traffic,
+    ST[w.status].label, w.possible_links, hist(w).length + (LIVE_STATUSES.includes(w.status) ? 1 : 0), w.target_url, w.anchor_text, w.live_url, w.their_link, w.invoice_url, w.live_date, w.paid_date, w.notes, (w.created_at || '').slice(0, 10)].map(q).join(',')));
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob(['﻿' + lines.join('\n')], { type: 'text/csv' }));
+  a.download = `link-tracker-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click(); URL.revokeObjectURL(a.href);
+}
+
+// ---------- Boss ----------
+function bossCard(w, extra, btns) {
+  const badge = (w.possible_links > 1 || hist(w).length) ? `<span class="badge">Link ${linkNo(w)} / ${w.possible_links ?? '?'}</span>` : '';
+  return `<article class="card"><div class="row"><span class="dom">${esc(w.domain)}</span>${pill(w)}</div>
+    <div class="meta"><span>${dealLabel(w.deal_type)}</span>${w.deal_type === 'paid' ? `<span>${money(w.price)}</span>` : ''}<span>by ${esc(memberName(w.member_id))}</span><span>DA ${w.da ?? '—'}</span><span>Traffic ${w.traffic ?? '—'}</span>${badge}</div>
+    ${extra ? `<div class="next">${extra}</div>` : ''}
+    <div class="foot" style="flex-wrap:wrap">${btns}<button class="btn sm" data-act="open" data-id="${w.id}">Details</button></div></article>`;
+}
+const B = (act, id, label, primary) => `<button class="btn ${primary ? 'primary' : ''}" data-act="${act}" data-id="${id}">${label}</button>`;
+
+function bossView() {
+  const ws = visibleSites();
+  const review = ws.filter(w => w.status === 'boss_review');
+  const needs = ws.filter(w => w.status === 'approved');
+  const inv = ws.filter(w => w.deal_type === 'paid' && ['live', 'invoice_received'].includes(w.status));
+  const exch = ws.filter(w => w.deal_type === 'exchange' && w.status === 'live' && !w.their_link_live);
+  const next = ws.filter(nextPossible);
+  const due = inv.reduce((a, w) => a + (+w.price || 0), 0);
+  const q = S.bossQ.trim().toLowerCase();
+  const all = ws.filter(w => !q || w.domain.includes(q));
+  const sec = (title, sub, list, fn) => `<h2>${title} <span class="badge">${list.length}</span></h2><p class="sub">${sub}</p>` +
+    (list.length ? `<div class="cards">${list.map(fn).join('')}</div>` : '<div class="empty">Nothing here right now.</div>');
+  const notes = w => (w.notes ? `<div><span class="k">Notes</span><br>${esc(w.notes)}</div>` : '') + (w.contact_email ? `<div><span class="k">Contact</span><br>${esc(w.contact_email)}</div>` : '');
+  return `<div class="stats"><div class="stat ${review.length ? 'hot' : ''}"><b>${review.length}</b><span>Reviews pending</span></div>
+    <div class="stat ${needs.length ? 'hot' : ''}"><b>${needs.length}</b><span>Links to give</span></div>
+    <div class="stat"><b>${inv.length} · ${money(due)}</b><span>Invoices / payments due</span></div>
+    <div class="stat"><b>${exch.length}</b><span>Exchange links pending</span></div></div>
+    ${sec('Review', 'Websites waiting for your approval.', review, w => bossCard(w, notes(w),
+      `${B('approve', w.id, 'Approve', true)}${B('approvelink', w.id, 'Approve + add link')}<button class="btn danger" data-act="reject" data-id="${w.id}">Reject</button>`))}
+    ${sec('Needs a link (Approved)', 'Approved websites that are waiting for a target URL and anchor.', needs, w => bossCard(w, `Possible links: <b>${w.possible_links}</b>`, B('addlink', w.id, 'Add link', true)))}
+    ${sec('Invoices and payments', 'Paid deals that are live.', inv, w => bossCard(w,
+      `<div><span class="k">Our live link</span><br>${lnk(w.live_url)}</div><div><span class="k">Invoice</span><br>${w.invoice_url ? lnk(w.invoice_url) : 'No invoice link yet'}</div><div><span class="k">Amount</span><br>${money(w.price)}</div>`,
+      w.status === 'live' ? B('invoice', w.id, 'Invoice received', true) : B('paid', w.id, 'Mark as paid', true)))}
+    ${sec('Exchange links to place', 'Exchange deals that are live. Place their link somewhere.', exch, w => bossCard(w,
+      `<div><span class="k">Our live link</span><br>${lnk(w.live_url)}</div><div><span class="k">Their link</span><br>${lnk(w.their_link)}</div>`, B('theirlive', w.id, 'Their link is live', true)))}
+    ${sec('Next link possible on the same website', 'Finished websites that can take more links.', next, w => bossCard(w, `Links placed: <b>${linkNo(w)}</b> of ${w.possible_links}`, B('nextlink', w.id, 'Add next link', true)))}
+    <h2>All websites</h2><div class="toolbar"><input type="search" id="bq" placeholder="Search website" value="${esc(S.bossQ)}" data-input="bq"></div>
+    ${all.length ? `<div class="cards">${all.map(w => bossCard(w, '', '')).join('')}</div>` : '<div class="empty">No websites found.</div>'}`;
+}
+
+// ---------- Member ----------
+const needsAction = w => ['link_ready', 'sent'].includes(w.status);
+
+function memberView() {
+  const ws = visibleSites();
+  const ym = ymNow();
+  const live = ws.reduce((a, w) => a + liveCount(w, ym), 0);
+  const f = S.mem.f, q = S.mem.q.trim().toLowerCase();
+  const filt = {
+    all: () => true, action: needsAction, boss: w => ['boss_review', 'approved'].includes(w.status),
+    live: w => LIVE_STATUSES.includes(w.status), rejected: w => w.status === 'rejected',
+  }[f];
+  const list = ws.filter(w => filt(w) && (!q || w.domain.includes(q)));
+  const chips = [['all', 'All'], ['action', 'Action needed'], ['boss', 'With Boss'], ['live', 'Live'], ['rejected', 'Rejected']];
+  return `<div class="stats"><div class="stat"><b>${ws.length}</b><span>My websites</span></div>
+    <div class="stat ${ws.filter(needsAction).length ? 'hot' : ''}"><b>${ws.filter(needsAction).length}</b><span>Action needed</span></div>
+    <div class="stat"><b>${live}</b><span>Live this month</span></div><div class="stat"><b>${money(live * S.teamRate)}</b><span>My earnings this month</span></div></div>
+    <div class="toolbar"><button class="btn primary" data-act="add" ${readOnly() ? 'disabled' : ''}>+ Add website</button>
+      <input type="search" id="memq" placeholder="Search" value="${esc(S.mem.q)}" data-input="memq"></div>
+    <div class="chips" style="margin-bottom:14px">${chips.map(([k, l]) => `<button class="chip ${f === k ? 'on' : ''}" data-act="mfilter" data-v="${k}">${l}</button>`).join('')}</div>
+    ${list.length ? `<div class="cards">${list.map(memberCard).join('')}</div>` :
+      `<div class="empty">${ws.length ? 'No websites in this view.' : 'No websites yet. Click + Add website when a site says yes.'}</div>`}`;
+}
+
+function memberCard(w) {
+  const badge = (w.possible_links > 1 || hist(w).length) ? `<span class="badge">Link ${linkNo(w)} / ${w.possible_links ?? '?'}</span>` : '';
+  let next = '';
+  if (w.status === 'link_ready') {
+    next = `<div class="next"><div><span class="k">Target URL</span><br>${lnk(w.target_url)}</div><div><span class="k">Anchor text</span><br>${esc(w.anchor_text)}</div>
+      <button class="btn" data-act="copymsg" data-id="${w.id}">Copy message for website</button>
+      <button class="btn primary big" data-act="sentbtn" data-id="${w.id}">Link sent to website</button></div>`;
+  } else if (w.status === 'sent') {
+    next = `<div class="next"><span>Waiting for the website to publish it.</span><button class="btn primary big" data-act="livebtn" data-id="${w.id}">Link is live</button></div>`;
+  } else {
+    const t = {
+      boss_review: 'Boss is reviewing', approved: "Waiting for Boss's link", rejected: 'Rejected: ' + (w.reject_reason || 'no reason given'),
+      invoice_received: 'Invoice with Boss', paid: 'Paid',
+      live: w.deal_type === 'exchange' ? (w.their_link_live ? 'Live. Exchange complete' : 'Live. Boss is placing the exchange link') : 'Live. Boss is handling the invoice',
+    }[w.status];
+    next = `<div class="next">${esc(t)}</div>`;
+  }
+  return `<article class="card"><div class="row"><span class="dom">${esc(w.domain)}</span>${pill(w)}</div>
+    <div class="meta"><span>${dealLabel(w.deal_type)}</span>${w.deal_type === 'paid' ? `<span>${money(w.price)}</span>` : ''}${w.possible_links ? `<span>${w.possible_links} possible links</span>` : ''}${badge}</div>${next}
+    <div class="foot"><button class="btn sm" data-act="edit" data-id="${w.id}">Edit</button><button class="btn sm danger" data-act="del" data-id="${w.id}">Delete</button></div></article>`;
+}
+
+function siteForm(w) {
+  w = w || { deal_type: 'exchange' };
+  return `<form data-form="site" data-id="${w.id || ''}">
+    <label>Website URL</label><input name="url" required placeholder="example.com" value="${esc(w.url || '')}" data-dup="1" autocomplete="off">
+    <div id="dup"></div>
+    <label>Contact email</label><input type="email" name="contact_email" value="${esc(w.contact_email || '')}">
+    <label>Deal type</label><select name="deal_type"><option value="exchange" ${w.deal_type === 'exchange' ? 'selected' : ''}>Exchange</option><option value="paid" ${w.deal_type === 'paid' ? 'selected' : ''}>Paid</option></select>
+    <div class="grid2"><div><label>DA</label><input type="number" min="0" max="100" name="da" value="${w.da ?? ''}"></div>
+    <div><label>Traffic (monthly)</label><input type="number" min="0" name="traffic" value="${w.traffic ?? ''}"></div></div>
+    <div id="pricewrap" class="${w.deal_type === 'paid' ? '' : 'hidden'}"><label>Price ($)</label><input type="number" min="0" step="0.01" name="price" value="${w.price ?? ''}"></div>
+    <label>Notes</label><textarea name="notes">${esc(w.notes || '')}</textarea>
+    <div style="margin-top:14px"><button class="btn primary big" type="submit">${w.id ? 'Save changes' : 'Add website'}</button></div></form>`;
+}
+
+function copyMessage(w) {
+  return `Hi,\n\nThanks for agreeing to place a link to our site. Please add this link to your page:\n\nURL: ${w.target_url}\nAnchor text: ${w.anchor_text}\n\nHTML: <a href="${w.target_url}">${w.anchor_text}</a>\n\nPlease send me the live page URL once it's published. Thank you!`;
+}
+
+// ---------- render ----------
+function render() {
+  if (!S.profile) return;
+  const a = document.activeElement, focus = a && a.id ? { id: a.id, s: a.selectionStart, e: a.selectionEnd } : null;
+  const role = eff().role;
+  app.innerHTML = header() + '<main>' + (role === 'manager' ? managerView() : role === 'boss' ? bossView() : memberView()) + '</main>';
+  if (focus) { const n = document.getElementById(focus.id); if (n) { n.focus(); try { n.setSelectionRange(focus.s, focus.e); } catch (e) {} } }
+}
+
+// ---------- actions ----------
+const WRITE = new Set(['approve', 'approvelink', 'reject', 'addlink', 'invoice', 'paid', 'theirlive', 'nextlink', 'add', 'edit', 'del', 'sentbtn', 'livebtn', 'import', 'rminvite']);
+const need = (id, msg, fields, form, title) => openDrawer(title, `<form data-form="${form}" data-id="${id}">${fields}<div style="margin-top:14px"><button class="btn primary big" type="submit">${msg}</button></div></form>`, 'form', id);
+const site = id => S.sites.find(w => w.id === id);
+const linkFields = `<label>Target URL</label><input name="target_url" required placeholder="https://client-site.com/page"><label>Anchor text</label><input name="anchor_text" required>`;
+
+const actions = {
+  logout: async () => { if (S.chan) sb.removeChannel(S.chan); await sb.auth.signOut(); },
+  theme: () => {
+    const cur = document.documentElement.dataset.theme || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    const nx = cur === 'dark' ? 'light' : 'dark';
+    document.documentElement.dataset.theme = nx;
+    try { localStorage.setItem('lt-theme', nx); } catch (e) {}
+  },
+  close: closeDrawer,
+  tab: el => { S.tab = el.dataset.v; render(); },
+  pipe: el => { S.mf.status = S.mf.status === el.dataset.v ? '' : el.dataset.v; render(); },
+  clearf: () => { S.mf = { status: '', member: '', deal: '', q: '' }; render(); },
+  mfilter: el => { S.mem.f = el.dataset.v; render(); },
+  exitpreview: () => { S.preview = null; render(); },
+  open: el => openDetail(el.dataset.id),
+  whatsapp: () => copy(whatsappText()),
+  export: csvExport,
+  import: () => openDrawer('Import websites', `<form data-form="import"><p class="hint">One website per line: <b>url, email, exchange/paid, price, member name</b> (comma or tab separated). Duplicates are skipped.</p>
+    <textarea name="rows" rows="10" required placeholder="example.com, info@example.com, paid, 150, Sara"></textarea>
+    <div style="margin-top:14px"><button class="btn primary big" type="submit">Import</button></div><div id="importres"></div></form>`, 'form'),
+  rminvite: async el => { const { error } = await sb.from('invites').delete().eq('email', el.dataset.v); error ? toast(errMsg(error), 'err') : (toast('Invite removed'), refreshSoon()); },
+  add: () => openDrawer('Add website', siteForm(), 'form'),
+  edit: el => openDrawer('Edit website', siteForm(site(el.dataset.id)), 'form', el.dataset.id),
+  del: async el => {
+    const id = el.dataset.id;
+    if (armed !== id) {
+      armed = id; el.textContent = 'Really delete?'; el.classList.add('armed');
+      setTimeout(() => { if (armed === id) { armed = null; if (el.isConnected) { el.textContent = 'Delete'; el.classList.remove('armed'); } } }, 4000);
+      return;
+    }
+    armed = null;
+    const { error } = await sb.from('websites').delete().eq('id', id);
+    if (error) return toast(errMsg(error), 'err');
+    toast('Deleted'); closeDrawer(); refreshSoon();
+  },
+  copymsg: el => copy(copyMessage(site(el.dataset.id))),
+  sentbtn: el => upd(el.dataset.id, { status: 'sent' }, 'Status: Sent to Website'),
+  livebtn: el => {
+    const w = site(el.dataset.id);
+    need(w.id, 'Mark as live',
+      `<label>Live URL <span class="hint">(page where our link is live)</span></label><input name="live_url" required placeholder="https://…">` +
+      (w.deal_type === 'exchange' ? `<label>Their link <span class="hint">(the link they want from us)</span></label><input name="their_link">` : `<label>Invoice link <span class="hint">(link or PDF URL)</span></label><input name="invoice_url">`),
+      'live', 'Link is live');
+  },
+  approve: el => need(el.dataset.id, 'Approve', `<label>Possible links <span class="hint">(how many links this website can take)</span></label><input type="number" name="possible_links" min="1" required value="1">`, 'approve', 'Approve website'),
+  approvelink: el => need(el.dataset.id, 'Approve and send link', `<label>Possible links</label><input type="number" name="possible_links" min="1" required value="1">${linkFields}`, 'approvelink', 'Approve + add link'),
+  reject: el => need(el.dataset.id, 'Reject', `<label>Reason</label><select name="reason" required>${REJECT_REASONS.map(r => `<option>${r}</option>`).join('')}</select>`, 'reject', 'Reject website'),
+  addlink: el => need(el.dataset.id, 'Save link', linkFields, 'addlink', 'Add link'),
+  invoice: el => upd(el.dataset.id, { status: 'invoice_received' }, 'Status: Invoice Received'),
+  paid: el => upd(el.dataset.id, { status: 'paid' }, 'Status: Paid'),
+  theirlive: el => upd(el.dataset.id, { their_link_live: true }, 'Exchange completed'),
+  nextlink: el => {
+    const w = site(el.dataset.id);
+    need(w.id, 'Add next link', linkFields + (w.deal_type === 'paid' ? `<label>Price for this link ($)</label><input type="number" min="0" step="0.01" name="price" value="${w.price ?? ''}">` : ''), 'nextlink', `Next link (${linkNo(w) + 1} / ${w.possible_links})`);
+  },
+};
+
+const forms = {
+  async login(f, d) {
+    const email = txt(d.get('email'));
+    const { error } = await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: location.origin + location.pathname } });
+    if (error) return toast(/database|not been invited|signups/i.test(error.message) ? "This email hasn't been invited yet. Ask the Manager." : error.message, 'err');
+    showLogin('Check your email for the sign-in link.');
+  },
+  async name(f, d) {
+    const { error } = await sb.rpc('set_my_name', { n: d.get('name') });
+    if (error) return toast(errMsg(error), 'err');
+    boot();
+  },
+  async site(f, d) {
+    const paid = d.get('deal_type') === 'paid';
+    const row = { url: txt(d.get('url')), contact_email: txt(d.get('contact_email')), deal_type: d.get('deal_type'), da: num(d.get('da')), traffic: num(d.get('traffic')), price: paid ? num(d.get('price')) : null, notes: txt(d.get('notes')) };
+    if (!normDomain(row.url).includes('.')) return toast('Enter a valid website URL', 'err');
+    const id = f.dataset.id;
+    const { error } = id ? await sb.from('websites').update(row).eq('id', id) : await sb.from('websites').insert({ ...row, member_id: S.profile.id });
+    if (error) return toast(errMsg(error), 'err');
+    toast(id ? 'Saved' : 'Website added. Boss will review it.'); closeDrawer(); refreshSoon();
+  },
+  live: (f, d) => upd(f.dataset.id, { status: 'live', live_url: txt(d.get('live_url')), their_link: txt(d.get('their_link')), invoice_url: txt(d.get('invoice_url')) }, 'Status: Live'),
+  approve: (f, d) => upd(f.dataset.id, { status: 'approved', possible_links: num(d.get('possible_links')) }, 'Status: Approved'),
+  approvelink: (f, d) => upd(f.dataset.id, { status: 'link_ready', possible_links: num(d.get('possible_links')), target_url: txt(d.get('target_url')), anchor_text: txt(d.get('anchor_text')) }, 'Status: Link Ready'),
+  reject: (f, d) => upd(f.dataset.id, { status: 'rejected', reject_reason: d.get('reason') }, 'Status: Rejected'),
+  addlink: (f, d) => upd(f.dataset.id, { status: 'link_ready', target_url: txt(d.get('target_url')), anchor_text: txt(d.get('anchor_text')) }, 'Status: Link Ready'),
+  async nextlink(f, d) {
+    const { error } = await sb.rpc('add_next_link', { p_id: f.dataset.id, p_target: d.get('target_url'), p_anchor: d.get('anchor_text'), p_price: num(d.get('price')) });
+    if (error) return toast(errMsg(error), 'err');
+    toast('Status: Link Ready'); closeDrawer(); refreshSoon();
+  },
+  correct(f, d) {
+    const w = site(f.dataset.id), patch = {};
+    if (d.get('status') && d.get('status') !== w.status) patch.status = d.get('status');
+    patch.possible_links = num(d.get('possible_links')); patch.target_url = txt(d.get('target_url'));
+    patch.anchor_text = txt(d.get('anchor_text')); patch.reject_reason = txt(d.get('reject_reason'));
+    return upd(w.id, patch, 'Saved');
+  },
+  async rates(f, d) {
+    const [a, b] = await Promise.all([
+      sb.from('settings').update({ team_rate: num(d.get('team_rate')) }).eq('id', 1),
+      sb.from('private_settings').update({ boss_rate: num(d.get('boss_rate')) }).eq('id', 1)]);
+    if (a.error || b.error) return toast(errMsg(a.error || b.error), 'err');
+    S.teamRate = num(d.get('team_rate')); S.bossRate = num(d.get('boss_rate'));
+    toast('Rates saved'); render();
+  },
+  async invite(f, d) {
+    const email = String(d.get('email')).trim().toLowerCase();
+    if (S.people.some(p => p.email === email)) return toast('That person already has an account', 'err');
+    const { error } = await sb.from('invites').upsert({ email, role: d.get('role') });
+    if (error) return toast(errMsg(error), 'err');
+    toast('Invited. Ask them to sign in with that email.'); f.reset(); await loadData(); render();
+  },
+  async import(f, d) {
+    const members = S.people.filter(p => p.role === 'member');
+    const seen = new Set(S.sites.map(w => w.domain));
+    let ok = 0; const skipped = [];
+    for (const line of String(d.get('rows')).split(/\r?\n/)) {
+      if (!line.trim()) continue;
+      const c = line.split(/\t|,/).map(x => x.trim());
+      if (/^(url|website)$/i.test(c[0])) continue;
+      const dom = normDomain(c[0]);
+      const m = members.find(p => [p.name, p.email].some(x => x && x.toLowerCase() === (c[4] || '').toLowerCase()));
+      if (!dom.includes('.')) { skipped.push(`${c[0]}: invalid URL`); continue; }
+      if (seen.has(dom)) { skipped.push(`${dom}: duplicate`); continue; }
+      if (!m) { skipped.push(`${dom}: unknown member "${c[4] || ''}"`); continue; }
+      const paid = /paid/i.test(c[2] || '');
+      const { error } = await sb.from('websites').insert({ url: c[0], contact_email: c[1] || null, deal_type: paid ? 'paid' : 'exchange', price: paid ? num(c[3]) : null, member_id: m.id });
+      if (error) { skipped.push(`${dom}: ${errMsg(error)}`); continue; }
+      seen.add(dom); ok++;
+    }
+    $('#importres').innerHTML = `<p><b>${ok}</b> imported, <b>${skipped.length}</b> skipped.</p>${skipped.length ? `<div class="warn">${skipped.map(esc).join('<br>')}</div>` : ''}`;
+    toast(`Imported ${ok}, skipped ${skipped.length}`); refreshSoon();
+  },
+};
+
+const changes = {
+  preview: t => { S.preview = t.value ? S.people.find(p => p.id === t.value) : null; render(); },
+  mmember: t => { S.mf.member = t.value; render(); },
+  mdeal: t => { S.mf.deal = t.value; render(); },
+  month: t => { if (t.value) { S.month = t.value; render(); } },
+};
+const inputs = {
+  mq: t => { S.mf.q = t.value; render(); },
+  memq: t => { S.mem.q = t.value; render(); },
+  bq: t => { S.bossQ = t.value; render(); },
+};
+
+let dupTimer;
+async function checkDup(input) {
+  const form = input.form, box = $('#dup', form), btn = $('[type=submit]', form);
+  const d = normDomain(input.value);
+  if (!d.includes('.')) { box.innerHTML = ''; btn.disabled = false; return; }
+  const { data } = await sb.from('domains').select('member_name,website_id').eq('domain', d).maybeSingle();
+  if (normDomain(input.value) !== d) return;
+  if (data && data.website_id !== form.dataset.id) {
+    box.innerHTML = `<div class="warn">This website is already in the tracker (added by ${esc(data.member_name || 'a team member')}). Don't work on it.</div>`;
+    btn.disabled = true;
+  } else { box.innerHTML = ''; btn.disabled = false; }
+}
+
+document.addEventListener('click', e => {
+  const el = e.target.closest('[data-act]');
+  if (!el || !actions[el.dataset.act]) return;
+  if (readOnly() && WRITE.has(el.dataset.act)) return toast('Preview is read-only', 'err');
+  actions[el.dataset.act](el);
+});
+document.addEventListener('submit', async e => {
+  const f = e.target.closest('form[data-form]');
+  if (!f) return;
+  e.preventDefault();
+  if (readOnly()) return toast('Preview is read-only', 'err');
+  const btn = $('[type=submit]', f);
+  if (btn) btn.disabled = true;
+  await forms[f.dataset.form](f, new FormData(f));
+  if (btn && btn.isConnected) btn.disabled = false;
+});
+document.addEventListener('change', e => {
+  const t = e.target;
+  if (t.dataset.change) changes[t.dataset.change](t);
+  if (t.name === 'deal_type') { const p = $('#pricewrap'); if (p) p.classList.toggle('hidden', t.value !== 'paid'); }
+});
+document.addEventListener('input', e => {
+  const t = e.target;
+  if (t.dataset.input) inputs[t.dataset.input](t);
+  if (t.dataset.dup) { clearTimeout(dupTimer); dupTimer = setTimeout(() => checkDup(t), 300); }
+});
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && S.drawer) closeDrawer(); });
+
+// ---------- start ----------
+if (!CFG.SUPABASE_URL || CFG.SUPABASE_URL.startsWith('YOUR_') || !window.supabase) {
+  app.innerHTML = `<div class="center"><div class="panel"><h1>Setup needed</h1>
+    <p>Add your Supabase URL and anon key to <code>config.js</code>, then run <code>schema.sql</code> in the Supabase SQL editor.</p></div></div>`;
+} else {
+  sb = window.supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY);
+  sb.auth.onAuthStateChange((event, session) => {
+    S.session = session;
+    if (!session) { if (S.chan) sb.removeChannel(S.chan); S.chan = null; S.preview = null; showLogin(); return; }
+    if (event === 'INITIAL_SESSION' || (event === 'SIGNED_IN' && !S.profile)) setTimeout(boot, 0);
+  });
+}
+})();
