@@ -292,6 +292,9 @@ function settingsView() {
     <div class="grid2"><div><label>Team rate ($)</label><input type="number" step="0.01" min="0" name="team_rate" value="${S.teamRate}" required></div>
     <div><label>Client rate ($)</label><input type="number" step="0.01" min="0" name="boss_rate" value="${S.bossRate}" required></div></div>
     <p class="hint">The client rate is visible to you only.</p><button class="btn primary" type="submit">Save rates</button></form>
+    <h2>Invite a user</h2><form data-form="invite" style="max-width:520px"><div class="grid2"><div><label>Email</label><input type="email" name="email" required placeholder="name@example.com"></div>
+    <div><label>Role</label><select name="role"><option value="member">Team member</option><option value="boss">Director</option></select></div></div>
+    <p class="hint">They can then create an account with this email on the sign-in page.</p><button class="btn primary" type="submit">Send invite</button></form>
     <h2>Team</h2>${S.people.length ? `<div class="tablewrap"><table><thead><tr><th>Name</th><th>Email</th><th>Role</th></tr></thead><tbody>${S.people.map(p => `<tr><td>${esc(p.name || '—')}</td><td>${esc(p.email)}</td><td>${p.role === 'manager' ? 'Manager' : `<select data-change="userrole" data-id="${p.id}" style="width:auto"><option value="member" ${p.role === 'member' ? 'selected' : ''}>Team member</option><option value="boss" ${p.role === 'boss' ? 'selected' : ''}>Director</option></select>`}</td></tr>`).join('')}
       ${S.invites.map(i => `<tr><td><i>Invited</i></td><td>${esc(i.email)}</td><td><button class="btn sm danger" data-act="rminvite" data-v="${esc(i.email)}">Remove</button></td></tr>`).join('')}</tbody></table></div>` : ''}`;
 }
@@ -563,6 +566,13 @@ const forms = {
     patch.possible_links = num(d.get('possible_links')); patch.target_url = txt(d.get('target_url'));
     patch.anchor_text = txt(d.get('anchor_text')); patch.reject_reason = txt(d.get('reject_reason'));
     return upd(w.id, patch, 'Saved');
+  },
+  async invite(f, d) {
+    const email = txt(d.get('email')).toLowerCase();
+    if (S.people.some(p => (p.email || '').toLowerCase() === email)) return toast('That user already has an account', 'err');
+    const { error } = await sb.from('invites').upsert({ email, role: d.get('role') === 'boss' ? 'boss' : 'member' });
+    if (error) return toast(errMsg(error), 'err');
+    toast('Invite added'); f.reset(); refreshSoon();
   },
   async rates(f, d) {
     const [a, b] = await Promise.all([
