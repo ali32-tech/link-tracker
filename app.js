@@ -39,7 +39,7 @@ const liveCount = (w, ym) =>
 const errMsg = e => (e && e.code === '23505' ? 'This website is already in the tracker.' : (e && e.message) || 'Something went wrong');
 
 const S = {
-  session: null, profile: null, sites: [], trash: [], people: [], invites: [], teamRate: 7, bossRate: 10,
+  session: null, revOpen: false, profile: null, sites: [], trash: [], people: [], invites: [], teamRate: 7, bossRate: 10,
   nav: 'home', mf: { status: '', member: '', deal: '', q: '' }, mem: { f: 'all', q: '' }, bossQ: '',
   month: ymNow(), preview: null, drawer: null, chan: null,
 };
@@ -395,10 +395,10 @@ function sidebar() {
   let items = '';
   if (role === 'boss') {
     const d = sectionDefs(ws);
-    const open = ['home', 'needs', 'exch', 'next'].includes(S.nav);
+    const open = S.revOpen;
     const row = ([k, l, n, ic], sub) => btn(k, l, n, S.nav === k, 'nav', ic).replace('class="nav ', `class="nav ${sub ? 'sub ' : ''}`);
     const kids = open ? [['needs', 'Needs a link', d.needs.list.length, 'needs'], ['exch', 'Exchange links', d.exch.list.length, 'exch'], ['next', 'Next link possible', d.next.list.length, 'next']].map(r => row(r, true)).join('') : '';
-    items = row(['mine', 'My websites', d.mine.list.length, 'mine']) + row(['home', 'Review', ws.filter(w => w.status === 'boss_review').length, 'review']) + kids +
+    items = row(['mine', 'My websites', d.mine.list.length, 'mine']) + row(['home', 'Review', ws.filter(w => w.status === 'boss_review').length, 'review']).replace(/<\/button>$/, `<span class="chev ${open ? 'open' : ''}" data-act="revtoggle" role="button" aria-label="Show or hide sections"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span></button>`) + kids +
       row(['inv', 'Invoices & payments', d.inv.list.length, 'inv']) + row(['rejected', 'Rejected', d.rejected.list.length, 'rejected']) + row(['all', 'All websites', d.all.list.length, 'all']) +
       row(['trash', 'Trash', d.trash.list.length, 'trash']).replace('class="nav ', 'class="nav trashbtn ');
   } else if (role === 'manager') {
@@ -505,7 +505,8 @@ const actions = {
   showpw: el => { const i = el.previousElementSibling; i.type = i.type === 'password' ? 'text' : 'password'; el.textContent = i.type === 'password' ? 'Show' : 'Hide'; },
   logout: async () => { if (S.chan) sb.removeChannel(S.chan); await sb.auth.signOut(); },
   close: closeDrawer,
-  nav: el => { S.nav = el.dataset.v; render(); window.scrollTo(0, 0); },
+  nav: el => { S.nav = el.dataset.v; S.revOpen = ['home', 'needs', 'exch', 'next'].includes(S.nav); render(); window.scrollTo(0, 0); },
+  revtoggle: () => { S.revOpen = !S.revOpen; render(); },
   pipe: el => { S.mf.status = S.mf.status === el.dataset.v ? '' : el.dataset.v; render(); },
   clearf: () => { S.mf = { status: '', member: '', deal: '', q: '' }; render(); },
   mfilter: el => { S.mem.f = el.dataset.v; render(); },

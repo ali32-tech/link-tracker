@@ -216,3 +216,5 @@ main .tablewrap{margin-top:4px}
 
 .nav.sub{margin-left:20px;font-size:13px;padding:7px 10px;position:relative}.nav.sub:before{content:'';position:absolute;left:-10px;top:0;bottom:0;border-left:2px solid var(--border)}
 @media(max-width:800px){.nav.sub{margin-left:0}.nav.sub:before{display:none}}
+
+.chev{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:6px;color:var(--muted);transition:transform .15s;transform:rotate(-90deg)}.chev.open{transform:none}.chev:hover{background:var(--border)}
