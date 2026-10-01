@@ -195,17 +195,19 @@ main .tablewrap{margin-top:4px}
 .side{height:calc(100vh - 62px);overflow-y:auto}.nav.trashbtn{margin-top:auto}
 @media(max-width:800px){.side{height:auto}.nav.trashbtn{margin-top:0}}
 
-/* sidebar section colors */
-.nav{--c:#64748B}
-.c-mine{--c:#3B82F6}.c-review{--c:#F59E0B}.c-needs{--c:#8B5CF6}.c-inv{--c:#10B981}.c-exch{--c:#06B6D4}
-.c-next{--c:#6366F1}.c-rejected{--c:#EF4444}.c-all{--c:#64748B}.c-trash{--c:#F43F5E}
-.c-commission{--c:#10B981}.c-settings{--c:#64748B}.c-action{--c:#F59E0B}.c-live{--c:#10B981}
-.nav .ico{color:var(--c)}
-.nav:hover{background:color-mix(in srgb,var(--c) 10%,transparent)}
-.nav.on{background:color-mix(in srgb,var(--c) 16%,transparent);color:var(--c)}
-.nav.on .count{background:var(--c);color:#fff}
-.nav:not(.on) .count{background:color-mix(in srgb,var(--c) 14%,transparent);color:var(--c)}
+/* sidebar: one theme color, red only for rejected/trash */
+.nav{--c:var(--accent)}
+.nav .ico{color:var(--muted)}
+.nav:hover{background:var(--accent-soft)}
+.nav.on{background:var(--accent-soft);color:var(--accent)}
+.nav.on .ico{color:var(--accent)}
+.nav.on .count{background:var(--accent);color:#fff}
+.nav:not(.on) .count{background:var(--border);color:var(--text)}
+.nav.c-rejected .ico,.nav.c-trash .ico{color:color-mix(in srgb,#EF4444 70%,var(--muted))}
+.nav.c-rejected:hover,.nav.c-trash:hover,.nav.c-rejected.on,.nav.c-trash.on{background:color-mix(in srgb,#EF4444 12%,transparent);color:#EF4444}
+.nav.c-rejected.on .ico,.nav.c-trash.on .ico{color:#EF4444}
+.nav.c-rejected.on .count,.nav.c-trash.on .count{background:#EF4444}
 
-.stat[class*=tint-]{background:color-mix(in srgb,var(--t) 10%,var(--surface));border-color:color-mix(in srgb,var(--t) 35%,var(--border))}
+/* stat numbers: theme green and blue, amber only for money still due */
 .stat[class*=tint-] b{color:var(--t)}
-.tint-blue{--t:#3B82F6}.tint-green{--t:#10B981}.tint-amber{--t:#F59E0B}.tint-purple{--t:#8B5CF6}
+.tint-blue{--t:var(--text)}.tint-green{--t:#10B981}.tint-amber{--t:#D97706}.tint-purple{--t:#3B82F6}
