@@ -179,4 +179,4 @@ dl.kv dd{margin:0;word-break:break-word}
 
 td.nowrap{white-space:nowrap}td.nowrap .btn{margin-right:6px}
 
-.topstats{max-width:1440px;margin:0 auto;padding:16px 16px 0}.topstats .stats{margin:0}
+.hstats{display:flex;gap:6px;flex-wrap:wrap;order:10;flex-basis:100%;padding-top:2px}.hstat{font-size:12px;font-weight:600;padding:4px 10px;border-radius:99px;border:1px solid var(--border);background:var(--surface);color:var(--muted);cursor:pointer;white-space:nowrap}.hstat b{color:var(--text);font-size:13px}.hstat:hover{border-color:var(--accent)}.hstat.hot{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}.hstat.hot b{color:var(--accent)}

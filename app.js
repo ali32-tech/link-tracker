@@ -175,7 +175,7 @@ function header() {
     previewSel = `<select data-change="preview" style="width:auto" aria-label="Preview as"><option value="">Preview as…</option>${opt('boss')}${opt('member')}</select>`;
   }
   return `<div class="top"><a class="brand" href="./" style="text-decoration:none"><img src="flipbite-logo.png" alt="FlipBite">FlipBite <b>Link Tracker</b></a>
-    ${previewSel}${S.preview ? `<span class="tag">${esc(e.name)}</span>` : `<input class="myname" data-change="myname" value="${esc(e.name)}" maxlength="60" aria-label="Your name (click to edit)" title="Click to edit your name">`}
+    ${eff().role === 'boss' ? bossStats() : ''}${previewSel}${S.preview ? `<span class="tag">${esc(e.name)}</span>` : `<input class="myname" data-change="myname" value="${esc(e.name)}" maxlength="60" aria-label="Your name (click to edit)" title="Click to edit your name">`}
     <button class="btn sm" data-act="theme" aria-label="Toggle dark mode">Theme</button>
     <button class="btn sm" data-act="logout">Sign out</button></div>
     ${S.preview ? `<div class="banner">Previewing as <b>${esc(S.preview.name || S.preview.email)}</b> Read-only.
@@ -395,12 +395,10 @@ function sidebar() {
 
 function bossStats() {
   const ws = visibleSites(), d = sectionDefs(ws);
-  const review = ws.filter(w => w.status === 'boss_review');
-  const due = d.inv.list.reduce((a, w) => a + (+w.price || 0), 0);
-  return `<div class="topstats"><div class="stats"><div class="stat ${review.length ? 'hot' : ''}"><b>${review.length}</b><span>Reviews pending</span></div>
-    <div class="stat ${d.needs.list.length ? 'hot' : ''}"><b>${d.needs.list.length}</b><span>Links to give</span></div>
-    <div class="stat"><b>${d.inv.list.length} · ${money(due)}</b><span>Invoices / payments due</span></div>
-    <div class="stat"><b>${d.exch.list.length}</b><span>Exchange links pending</span></div></div></div>`;
+  const review = ws.filter(w => w.status === 'boss_review').length;
+  const due = d.inv.list.reduce((x, w) => x + (+w.price || 0), 0);
+  const chip = (k, n, label, hot) => `<button class="hstat ${hot ? 'hot' : ''}" data-act="nav" data-v="${k}"><b>${n}</b> ${label}</button>`;
+  return `<div class="hstats">${chip('home', review, 'Reviews', review)}${chip('needs', d.needs.list.length, 'Links to give', d.needs.list.length)}${chip('inv', `${d.inv.list.length} · ${money(due)}`, 'Invoices due', 0)}${chip('exch', d.exch.list.length, 'Exchange pending', 0)}</div>`;
 }
 
 function bossView() {
@@ -481,7 +479,7 @@ function render() {
   const role = eff().role;
   if (['commission', 'settings'].includes(S.nav) && role !== 'manager') S.nav = 'home';
   const body = role === 'boss' && S.nav !== 'home' && sectionDefs(visibleSites())[S.nav] ? sectionView(S.nav) : role === 'manager' ? managerView() : role === 'boss' ? bossView() : memberView();
-  app.innerHTML = header() + (role === 'boss' ? bossStats() : '') + `<div class="layout">${sidebar()}<main>${body}</main></div>`;
+  app.innerHTML = header() + `<div class="layout">${sidebar()}<main>${body}</main></div>`;
   if (focus) { const n = document.getElementById(focus.id); if (n) { n.focus(); try { n.setSelectionRange(focus.s, focus.e); } catch (e) {} } }
 }
 
