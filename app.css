@@ -213,3 +213,6 @@ main .tablewrap{margin-top:4px}
 .c-mine{--ic:#3B82F6}.c-review{--ic:#F59E0B}.c-needs{--ic:#8B5CF6}.c-inv{--ic:#10B981}.c-exch{--ic:#06B6D4}
 .c-next{--ic:#6366F1}.c-rejected{--ic:#EF4444}.c-all{--ic:#64748B}.c-trash{--ic:#F43F5E}
 .c-commission{--ic:#10B981}.c-settings{--ic:#64748B}.c-action{--ic:#F59E0B}.c-live{--ic:#10B981}
+
+.nav.sub{margin-left:20px;font-size:13px;padding:7px 10px;position:relative}.nav.sub:before{content:'';position:absolute;left:-10px;top:0;bottom:0;border-left:2px solid var(--border)}
+@media(max-width:800px){.nav.sub{margin-left:0}.nav.sub:before{display:none}}

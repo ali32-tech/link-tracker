@@ -395,10 +395,12 @@ function sidebar() {
   let items = '';
   if (role === 'boss') {
     const d = sectionDefs(ws);
-    const rows = [['mine', 'My websites', d.mine.list.length, 'mine'], ['home', 'Review', ws.filter(w => w.status === 'boss_review').length, 'review'],
-      ['needs', 'Needs a link', d.needs.list.length, 'needs'], ['inv', 'Invoices & payments', d.inv.list.length, 'inv'], ['exch', 'Exchange links', d.exch.list.length, 'exch'],
-      ['next', 'Next link possible', d.next.list.length, 'next'], ['rejected', 'Rejected', d.rejected.list.length, 'rejected'], ['all', 'All websites', d.all.list.length, 'all']];
-    items = rows.map(([k, l, n, ic]) => btn(k, l, n, S.nav === k, 'nav', ic)).join('') + btn('trash', 'Trash', d.trash.list.length, S.nav === 'trash', 'nav', 'trash').replace('class="nav ', 'class="nav trashbtn ');
+    const open = ['home', 'needs', 'exch', 'next'].includes(S.nav);
+    const row = ([k, l, n, ic], sub) => btn(k, l, n, S.nav === k, 'nav', ic).replace('class="nav ', `class="nav ${sub ? 'sub ' : ''}`);
+    const kids = open ? [['needs', 'Needs a link', d.needs.list.length, 'needs'], ['exch', 'Exchange links', d.exch.list.length, 'exch'], ['next', 'Next link possible', d.next.list.length, 'next']].map(r => row(r, true)).join('') : '';
+    items = row(['mine', 'My websites', d.mine.list.length, 'mine']) + row(['home', 'Review', ws.filter(w => w.status === 'boss_review').length, 'review']) + kids +
+      row(['inv', 'Invoices & payments', d.inv.list.length, 'inv']) + row(['rejected', 'Rejected', d.rejected.list.length, 'rejected']) + row(['all', 'All websites', d.all.list.length, 'all']) +
+      row(['trash', 'Trash', d.trash.list.length, 'trash']).replace('class="nav ', 'class="nav trashbtn ');
   } else if (role === 'manager') {
     items = [['home', 'Websites', 'all'], ['commission', 'Commission', 'commission'], ['settings', 'Settings', 'settings']].map(([k, l, ic]) => btn(k, l, null, S.nav === k, 'nav', ic)).join('');
   } else {
