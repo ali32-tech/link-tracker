@@ -152,7 +152,9 @@ function showName() {
 }
 
 async function boot() {
-  const { data: p, error } = await sb.from('profiles').select('*').eq('id', S.session.user.id).maybeSingle();
+  const getProfile = () => sb.from('profiles').select('*').eq('id', S.session.user.id).maybeSingle();
+  let { data: p, error } = await getProfile();
+  if (!error && !p) { await sb.rpc('claim_profile'); ({ data: p, error } = await getProfile()); }
   if (error || !p) { app.innerHTML = `<div class="center"><div class="panel"><h1>No access</h1><p>Your account has no profile yet. Ask the Manager to invite ${esc(S.session.user.email)}.</p><button class="btn" data-act="logout">Sign out</button></div></div>`; return; }
   S.profile = p;
   if (!p.name) return showName();
