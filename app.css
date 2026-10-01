@@ -194,3 +194,14 @@ main .tablewrap{margin-top:4px}
 
 .side{height:calc(100vh - 62px);overflow-y:auto}.nav.trashbtn{margin-top:auto}
 @media(max-width:800px){.side{height:auto}.nav.trashbtn{margin-top:0}}
+
+/* sidebar section colors */
+.nav{--c:#64748B}
+.c-mine{--c:#3B82F6}.c-review{--c:#F59E0B}.c-needs{--c:#8B5CF6}.c-inv{--c:#10B981}.c-exch{--c:#06B6D4}
+.c-next{--c:#6366F1}.c-rejected{--c:#EF4444}.c-all{--c:#64748B}.c-trash{--c:#F43F5E}
+.c-commission{--c:#10B981}.c-settings{--c:#64748B}.c-action{--c:#F59E0B}.c-live{--c:#10B981}
+.nav .ico{color:var(--c)}
+.nav:hover{background:color-mix(in srgb,var(--c) 10%,transparent)}
+.nav.on{background:color-mix(in srgb,var(--c) 16%,transparent);color:var(--c)}
+.nav.on .count{background:var(--c);color:#fff}
+.nav:not(.on) .count{background:color-mix(in srgb,var(--c) 14%,transparent);color:var(--c)}

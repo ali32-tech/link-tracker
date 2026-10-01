@@ -392,7 +392,7 @@ const icon = k => `<svg class="ico" viewBox="0 0 24 24" width="18" height="18" f
 
 function sidebar() {
   const role = eff().role, ws = visibleSites();
-  const btn = (k, l, n, on, act = 'nav', ic = k) => `<button class="nav ${on ? 'on' : ''}" data-act="${act}" data-v="${k}">${icon(ic)}<span class="lbl">${l}</span>${n != null ? `<span class="count">${n}</span>` : ''}</button>`;
+  const btn = (k, l, n, on, act = 'nav', ic = k) => `<button class="nav c-${ic} ${on ? 'on' : ''}" data-act="${act}" data-v="${k}">${icon(ic)}<span class="lbl">${l}</span>${n != null ? `<span class="count">${n}</span>` : ''}</button>`;
   let items = '';
   if (role === 'boss') {
     const d = sectionDefs(ws);
