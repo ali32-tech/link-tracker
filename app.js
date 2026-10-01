@@ -191,7 +191,7 @@ function detailHtml(w) {
   const rows = [
     ['Website', lnk(w.url)], ['Member', esc(memberName(w.member_id))], ['Contact', esc(w.contact_email || '—')],
     ['Deal', dealLabel(w.deal_type)], ['Price', money(w.price)], ['DR / Traffic', `${w.da ?? '—'} / ${w.traffic ?? '—'}`],
-    ['Status', pill(w)], ...(ownBoss(w) ? [['Current link', `${linkNo(w)}`]] : [['Possible links', w.possible_links ?? '—'], ['Current link', `${linkNo(w)} / ${w.possible_links ?? '?'}`]]),
+    ['Status', pill(w)], ...(queueOf(w).length ? [['Queued links', queueOf(w).length]] : []), ...(ownBoss(w) ? [['Current link', `${linkNo(w)}`]] : [['Possible links', w.possible_links ?? '—'], ['Current link', `${linkNo(w)} / ${w.possible_links ?? '?'}`]]),
     ['Target URL', lnk(w.target_url)], ['Anchor text', esc(w.anchor_text || '—')],
   ];
   if (w.status === 'rejected') rows.push(['Reject reason', esc(w.reject_reason || '—')]);
@@ -445,12 +445,13 @@ function memberView() {
 function memberCard(w) {
   const badge = (w.possible_links > 1 || hist(w).length) ? `<span class="badge">Link ${linkNo(w)} / ${w.possible_links ?? '?'}</span>` : '';
   let next = '';
+  const more = queueOf(w).length ? `<div class="hint">${queueOf(w).length} more link(s) will follow after this one.</div>` : '';
   if (w.status === 'link_ready') {
     next = `<div class="next"><div><span class="k">Target URL</span><br>${lnk(w.target_url)}</div><div><span class="k">Anchor text</span><br>${esc(w.anchor_text)}</div>
       <button class="btn" data-act="copymsg" data-id="${w.id}">Copy message for website</button>
-      <button class="btn primary big" data-act="sentbtn" data-id="${w.id}">Link sent to website</button></div>`;
+      <button class="btn primary big" data-act="sentbtn" data-id="${w.id}">Link sent to website</button>${more}</div>`;
   } else if (w.status === 'sent') {
-    next = `<div class="next"><span>Waiting for the website to publish it.</span><button class="btn primary big" data-act="livebtn" data-id="${w.id}">Link is live</button></div>`;
+    next = `<div class="next"><span>Waiting for the website to publish it.</span><button class="btn primary big" data-act="livebtn" data-id="${w.id}">Link is live</button>${more}</div>`;
   } else {
     const t = {
       boss_review: 'Under review', approved: "Waiting for the link", rejected: 'Rejected: ' + (w.reject_reason || 'no reason given'),
@@ -499,9 +500,22 @@ function render() {
 const WRITE = new Set(['approve', 'approvelink', 'reject', 'addlink', 'invoice', 'paid', 'theirlive', 'nextlink', 'add', 'edit', 'del', 'sentbtn', 'livebtn', 'import', 'rminvite', 'bossedit', 'restore', 'purge']);
 const need = (id, msg, fields, form, title) => openDrawer(title, `<form data-form="${form}" data-id="${id}">${fields}<div style="margin-top:14px"><button class="btn primary big" type="submit">${msg}</button></div></form>`, 'form', id);
 const site = id => S.sites.find(w => w.id === id);
-const linkFields = `<label>Target URL</label><input name="target_url" required placeholder="https://client-site.com/page"><label>Anchor text</label><input name="anchor_text" required>`;
+const pairHtml = () => `<div class="pair"><label>Another link: Target URL</label><input name="more_target" placeholder="https://client-site.com/page"><label>Another link: Anchor text</label><input name="more_anchor"></div>`;
+const linkFieldsFor = (t, n) => `<label>Target URL</label><input name="target_url" required placeholder="https://client-site.com/page" value="${esc(t || '')}"><label>Anchor text</label><input name="anchor_text" required value="${esc(n || '')}"><div id="morelinks"></div><button type="button" class="btn sm" data-act="morelink" style="margin-top:10px">+ Add another link</button>`;
+const linkFields = linkFieldsFor('', '');
+const queueOf = w => (Array.isArray(w.queued_links) ? w.queued_links : []);
+function moreLinks(d) {
+  const t = d.getAll('more_target').map(txt), n = d.getAll('more_anchor').map(txt), out = [];
+  for (let k = 0; k < t.length; k++) {
+    if (!t[k] && !n[k]) continue;
+    if (!t[k] || !n[k]) { toast('Fill both the target URL and the anchor text for each extra link', 'err'); return null; }
+    out.push({ target_url: t[k], anchor_text: n[k] });
+  }
+  return out;
+}
 
 const actions = {
+  morelink: () => { const c = $('#morelinks'); if (c) c.insertAdjacentHTML('beforeend', pairHtml()); },
   mode: el => { S.mode = el.dataset.v; showLogin(); },
   showpw: el => { const i = el.previousElementSibling; i.type = i.type === 'password' ? 'text' : 'password'; el.textContent = i.type === 'password' ? 'Show' : 'Hide'; },
   logout: async () => { if (S.chan) sb.removeChannel(S.chan); await sb.auth.signOut(); },
@@ -580,7 +594,8 @@ const actions = {
   theirlive: el => upd(el.dataset.id, { their_link_live: true }, 'Exchange completed'),
   nextlink: el => {
     const w = site(el.dataset.id);
-    need(w.id, 'Add next link', linkFields + (w.deal_type === 'paid' ? `<label>Price for this link ($)</label><input type="number" min="0" step="0.01" name="price" value="${w.price ?? ''}">` : ''), 'nextlink', `Next link (${linkNo(w) + 1} / ${w.possible_links})`);
+    const q0 = queueOf(w)[0] || {};
+    need(w.id, 'Add next link', (queueOf(w).length ? `<p class="hint">${queueOf(w).length} link(s) waiting in the queue. The first one is filled in below.</p>` : '') + linkFieldsFor(q0.target_url, q0.anchor_text) + (w.deal_type === 'paid' ? `<label>Price for this link ($)</label><input type="number" min="0" step="0.01" name="price" value="${w.price ?? ''}">` : ''), 'nextlink', ownBoss(w) ? `Next link (${linkNo(w) + 1})` : `Next link (${linkNo(w) + 1} / ${w.possible_links})`);
   },
 };
 
@@ -649,7 +664,11 @@ const forms = {
     return upd(f.dataset.id, { status: 'live', live_url: txt(d.get('live_url')), their_link: txt(d.get('their_link')), invoice_url: invoice }, 'Status: Live');
   },
   approve: (f, d) => upd(f.dataset.id, { status: 'approved', possible_links: num(d.get('possible_links')) }, 'Status: Approved'),
-  approvelink: (f, d) => upd(f.dataset.id, { status: 'link_ready', possible_links: num(d.get('possible_links')), target_url: txt(d.get('target_url')), anchor_text: txt(d.get('anchor_text')) }, 'Status: Link Ready'),
+  approvelink(f, d) {
+    const more = moreLinks(d);
+    if (!more) return;
+    return upd(f.dataset.id, { status: 'link_ready', possible_links: Math.max(num(d.get('possible_links')) || 1, 1 + more.length), target_url: txt(d.get('target_url')), anchor_text: txt(d.get('anchor_text')), queued_links: more }, 'Status: Link Ready');
+  },
   reject: (f, d) => {
     const other = txt(d.get('other_reason'));
     if (d.get('reason') === 'Other' && !other) return toast('Please write the reason', 'err');
@@ -660,10 +679,20 @@ const forms = {
     if (status === 'rejected' && !reason) return toast('Please write the reject reason', 'err');
     return upd(f.dataset.id, { status, reject_reason: status === 'rejected' ? reason : null, possible_links: Math.max(1, num(d.get('possible_links')) || 1), target_url: txt(d.get('target_url')), anchor_text: txt(d.get('anchor_text')) }, 'Saved');
   },
-  addlink: (f, d) => upd(f.dataset.id, { status: 'link_ready', target_url: txt(d.get('target_url')), anchor_text: txt(d.get('anchor_text')) }, 'Status: Link Ready'),
+  addlink(f, d) {
+    const more = moreLinks(d);
+    if (!more) return;
+    const w = site(f.dataset.id), queue = queueOf(w).concat(more);
+    return upd(f.dataset.id, { status: 'link_ready', target_url: txt(d.get('target_url')), anchor_text: txt(d.get('anchor_text')), queued_links: queue, possible_links: Math.max(w.possible_links || 1, linkNo(w) + queue.length) }, 'Status: Link Ready');
+  },
   async nextlink(f, d) {
+    const more = moreLinks(d);
+    if (!more) return;
+    const w = site(f.dataset.id);
     const { error } = await sb.rpc('add_next_link', { p_id: f.dataset.id, p_target: d.get('target_url'), p_anchor: d.get('anchor_text'), p_price: num(d.get('price')) });
     if (error) return toast(errMsg(error), 'err');
+    const queue = queueOf(w).slice(1).concat(more);
+    if (queueOf(w).length || more.length) await sb.from('websites').update({ queued_links: queue, possible_links: Math.max(w.possible_links || 1, linkNo(w) + 1 + queue.length) }).eq('id', f.dataset.id);
     toast('Status: Link Ready'); closeDrawer(); refreshSoon();
   },
   async rolepw(f, d) {

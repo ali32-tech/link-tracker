@@ -44,6 +44,7 @@ create table public.websites (
   traffic text,
   notes text,
   deleted_at timestamptz,
+  queued_links jsonb not null default '[]'::jsonb,
   status text not null default 'boss_review' check (status in
     ('boss_review','approved','rejected','link_ready','sent','live','invoice_received','paid')),
   possible_links int,
@@ -123,7 +124,7 @@ begin
     new.reject_reason := null; new.live_url := null; new.their_link := null;
     new.their_link_live := false; new.invoice_url := null;
     new.live_date := null; new.paid_date := null; new.link_history := '[]'::jsonb;
-    new.deleted_at := null;
+    new.deleted_at := null; new.queued_links := '[]'::jsonb;
     new.created_at := now(); new.updated_at := now();
     return new;
   end if;
@@ -134,6 +135,7 @@ begin
   if not (r = 'boss' and old.member_id = auth.uid()) then new.deleted_at := old.deleted_at; end if;
 
   if r = 'member' or (r = 'manager' and old.member_id = auth.uid()) then
+    new.queued_links := old.queued_links;
     new.possible_links := old.possible_links; new.target_url := old.target_url;
     new.anchor_text := old.anchor_text; new.reject_reason := old.reject_reason;
     new.their_link_live := old.their_link_live; new.paid_date := old.paid_date;
