@@ -332,7 +332,7 @@ function sectionDefs(allWs) {
   return {
     mine: { label: 'My websites', sub: 'Websites you add yourself. They need no approval and nobody else can see them.', list: mineList, add: true, own: true },
     needs: { label: 'Needs a link (Approved)', sub: 'Approved websites that are waiting for a target URL and anchor.', list: ws.filter(w => w.status === 'approved'),
-      extra: [['Possible links', w => w.possible_links ?? '?']], act: w => act(B('addlink', w.id, 'Add link', true)) },
+      extra: [['Possible links', w => w.possible_links ?? '?']], act: w => act(`${B('addlink', w.id, 'Add link', true)}<button class="btn" data-act="bossedit" data-id="${w.id}">Edit</button><button class="btn danger" data-act="reject" data-id="${w.id}">Reject</button>`) },
     inv: { label: 'Invoices and payments', sub: 'Paid deals that are live.', list: ws.filter(w => w.deal_type === 'paid' && ['live', 'invoice_received'].includes(w.status)),
       extra: [['Our live link', w => lnk(w.live_url)], ['Invoice', w => (w.invoice_url ? lnk(w.invoice_url) : 'No invoice link yet')]],
       act: w => act(w.status === 'live' ? B('invoice', w.id, 'Invoice received', true) : B('paid', w.id, 'Mark as paid', true)) },
@@ -460,7 +460,7 @@ function render() {
 }
 
 // ---------- actions ----------
-const WRITE = new Set(['approve', 'approvelink', 'reject', 'addlink', 'invoice', 'paid', 'theirlive', 'nextlink', 'add', 'edit', 'del', 'sentbtn', 'livebtn', 'import', 'rminvite']);
+const WRITE = new Set(['approve', 'approvelink', 'reject', 'addlink', 'invoice', 'paid', 'theirlive', 'nextlink', 'add', 'edit', 'del', 'sentbtn', 'livebtn', 'import', 'rminvite', 'bossedit']);
 const need = (id, msg, fields, form, title) => openDrawer(title, `<form data-form="${form}" data-id="${id}">${fields}<div style="margin-top:14px"><button class="btn primary big" type="submit">${msg}</button></div></form>`, 'form', id);
 const site = id => S.sites.find(w => w.id === id);
 const linkFields = `<label>Target URL</label><input name="target_url" required placeholder="https://client-site.com/page"><label>Anchor text</label><input name="anchor_text" required>`;
@@ -515,6 +515,12 @@ const actions = {
   approve: el => need(el.dataset.id, 'Approve', `<label>Possible links <span class="hint">(how many links this website can take)</span></label><input type="number" name="possible_links" min="1" required value="1">`, 'approve', 'Approve website'),
   approvelink: el => need(el.dataset.id, 'Approve and send link', `<label>Possible links</label><input type="number" name="possible_links" min="1" required value="1">${linkFields}`, 'approvelink', 'Approve + add link'),
   reject: el => need(el.dataset.id, 'Reject', `<label>Reason</label><select name="reason" required>${REJECT_REASONS.map(r => `<option>${r}</option>`).join('')}</select><div id="otherwrap" class="hidden"><label>Write the reason</label><input name="other_reason" maxlength="200" placeholder="Why is this website rejected?"></div>`, 'reject', 'Reject website'),
+  bossedit: el => {
+    const w = site(el.dataset.id);
+    need(w.id, 'Save changes', `<label>Possible links</label><input type="number" name="possible_links" min="1" required value="${w.possible_links ?? 1}">
+      <label>Target URL</label><input name="target_url" value="${esc(w.target_url || '')}" placeholder="https://…">
+      <label>Anchor text</label><input name="anchor_text" value="${esc(w.anchor_text || '')}">`, 'bossedit', 'Edit ' + w.domain);
+  },
   addlink: el => need(el.dataset.id, 'Save link', linkFields, 'addlink', 'Add link'),
   invoice: el => upd(el.dataset.id, { status: 'invoice_received' }, 'Status: Invoice Received'),
   paid: el => upd(el.dataset.id, { status: 'paid' }, 'Status: Paid'),
@@ -584,6 +590,7 @@ const forms = {
     if (d.get('reason') === 'Other' && !other) return toast('Please write the reason', 'err');
     return upd(f.dataset.id, { status: 'rejected', reject_reason: d.get('reason') === 'Other' ? other : d.get('reason') }, 'Status: Rejected');
   },
+  bossedit: (f, d) => upd(f.dataset.id, { possible_links: Math.max(1, num(d.get('possible_links')) || 1), target_url: txt(d.get('target_url')), anchor_text: txt(d.get('anchor_text')) }, 'Saved'),
   addlink: (f, d) => upd(f.dataset.id, { status: 'link_ready', target_url: txt(d.get('target_url')), anchor_text: txt(d.get('anchor_text')) }, 'Status: Link Ready'),
   async nextlink(f, d) {
     const { error } = await sb.rpc('add_next_link', { p_id: f.dataset.id, p_target: d.get('target_url'), p_anchor: d.get('anchor_text'), p_price: num(d.get('price')) });
