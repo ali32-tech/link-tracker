@@ -43,6 +43,7 @@ create table public.websites (
   da int,
   traffic text,
   notes text,
+  deleted_at timestamptz,
   status text not null default 'boss_review' check (status in
     ('boss_review','approved','rejected','link_ready','sent','live','invoice_received','paid')),
   possible_links int,
@@ -122,6 +123,7 @@ begin
     new.reject_reason := null; new.live_url := null; new.their_link := null;
     new.their_link_live := false; new.invoice_url := null;
     new.live_date := null; new.paid_date := null; new.link_history := '[]'::jsonb;
+    new.deleted_at := null;
     new.created_at := now(); new.updated_at := now();
     return new;
   end if;
@@ -129,6 +131,7 @@ begin
   new.updated_at := now();
   new.id := old.id; new.member_id := old.member_id; new.created_at := old.created_at;
   if current_setting('app.bypass_guard', true) = '1' then return new; end if;
+  if not (r = 'boss' and old.member_id = auth.uid()) then new.deleted_at := old.deleted_at; end if;
 
   if r = 'member' or (r = 'manager' and old.member_id = auth.uid()) then
     new.possible_links := old.possible_links; new.target_url := old.target_url;

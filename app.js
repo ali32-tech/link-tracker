@@ -39,7 +39,7 @@ const liveCount = (w, ym) =>
 const errMsg = e => (e && e.code === '23505' ? 'This website is already in the tracker.' : (e && e.message) || 'Something went wrong');
 
 const S = {
-  session: null, profile: null, sites: [], people: [], invites: [], teamRate: 7, bossRate: 10,
+  session: null, profile: null, sites: [], trash: [], people: [], invites: [], teamRate: 7, bossRate: 10,
   nav: 'home', mf: { status: '', member: '', deal: '', q: '' }, mem: { f: 'all', q: '' }, bossQ: '',
   month: ymNow(), preview: null, drawer: null, chan: null,
 };
@@ -85,7 +85,8 @@ async function loadData() {
   const res = await Promise.all(jobs);
   const w = res.shift();
   if (w.error) return toast(errMsg(w.error), 'err');
-  S.sites = w.data;
+  S.sites = w.data.filter(x => !x.deleted_at);
+  S.trash = w.data.filter(x => !x.deleted_at ? false : x.member_id === S.profile.id);
   if (role !== 'boss') { const s = res.shift(); if (s.data) S.teamRate = +s.data.team_rate; }
   if (role !== 'member') S.people = res.shift().data || [];
   if (role === 'manager') {
@@ -342,6 +343,8 @@ function sectionDefs(allWs) {
     next: { label: 'Next link possible on the same website', sub: 'Finished websites that can take more links.', list: ws.filter(nextPossible),
       extra: [['Links placed', w => `${linkNo(w)} of ${w.possible_links}`]], act: w => act(B('nextlink', w.id, 'Add next link', true)) },
     rejected: { label: 'Rejected', sub: 'Websites you have rejected.', list: ws.filter(w => w.status === 'rejected'), extra: [['Reason', w => esc(w.reject_reason || '—')], ['Updated', w => (w.updated_at || '').slice(0, 10)]] },
+    trash: { label: 'Trash', sub: 'Websites you deleted. Restore them, or delete them forever.', list: S.trash, extra: [['Deleted', w => (w.deleted_at || '').slice(0, 10)]],
+      act: w => act(`<button class="btn" data-act="restore" data-id="${w.id}">Restore</button><button class="btn sm danger" data-act="purge" data-id="${w.id}">Delete forever</button>`) },
     all: { label: 'All websites', sub: '', list: ws.filter(w => !S.bossQ.trim() || w.domain.includes(S.bossQ.trim().toLowerCase())), search: true },
   };
 }
@@ -371,6 +374,7 @@ function sectionView(key) {
 }
 
 const ICONS = {
+  trash: '<path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 10v7M14 10v7"/>',
   mine: '<circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-7 8-7s8 3 8 7"/>',
   review: '<path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/>',
   needs: '<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>',
@@ -395,7 +399,7 @@ function sidebar() {
     const rows = [['mine', 'My websites', d.mine.list.length, 'mine'], ['home', 'Review', ws.filter(w => w.status === 'boss_review').length, 'review'],
       ['needs', 'Needs a link', d.needs.list.length, 'needs'], ['inv', 'Invoices & payments', d.inv.list.length, 'inv'], ['exch', 'Exchange links', d.exch.list.length, 'exch'],
       ['next', 'Next link possible', d.next.list.length, 'next'], ['rejected', 'Rejected', d.rejected.list.length, 'rejected'], ['all', 'All websites', d.all.list.length, 'all']];
-    items = rows.map(([k, l, n, ic]) => btn(k, l, n, S.nav === k, 'nav', ic)).join('');
+    items = rows.map(([k, l, n, ic]) => btn(k, l, n, S.nav === k, 'nav', ic)).join('') + '<div class="sep"></div>' + btn('trash', 'Trash', d.trash.list.length, S.nav === 'trash', 'nav', 'trash');
   } else if (role === 'manager') {
     items = [['home', 'Websites', 'all'], ['commission', 'Commission', 'commission'], ['settings', 'Settings', 'settings']].map(([k, l, ic]) => btn(k, l, null, S.nav === k, 'nav', ic)).join('');
   } else {
@@ -490,7 +494,7 @@ function render() {
 }
 
 // ---------- actions ----------
-const WRITE = new Set(['approve', 'approvelink', 'reject', 'addlink', 'invoice', 'paid', 'theirlive', 'nextlink', 'add', 'edit', 'del', 'sentbtn', 'livebtn', 'import', 'rminvite', 'bossedit']);
+const WRITE = new Set(['approve', 'approvelink', 'reject', 'addlink', 'invoice', 'paid', 'theirlive', 'nextlink', 'add', 'edit', 'del', 'sentbtn', 'livebtn', 'import', 'rminvite', 'bossedit', 'restore', 'purge']);
 const need = (id, msg, fields, form, title) => openDrawer(title, `<form data-form="${form}" data-id="${id}">${fields}<div style="margin-top:14px"><button class="btn primary big" type="submit">${msg}</button></div></form>`, 'form', id);
 const site = id => S.sites.find(w => w.id === id);
 const linkFields = `<label>Target URL</label><input name="target_url" required placeholder="https://client-site.com/page"><label>Anchor text</label><input name="anchor_text" required>`;
@@ -529,9 +533,28 @@ const actions = {
       return;
     }
     armed = null;
+    const w = site(id);
+    const soft = S.profile.role === 'boss' && w && w.member_id === S.profile.id;
+    const { error } = soft ? await sb.from('websites').update({ deleted_at: new Date().toISOString() }).eq('id', id) : await sb.from('websites').delete().eq('id', id);
+    if (error) return toast(errMsg(error), 'err');
+    toast(soft ? 'Moved to Trash' : 'Deleted'); closeDrawer(); refreshSoon();
+  },
+  async restore(el) {
+    const { error } = await sb.from('websites').update({ deleted_at: null }).eq('id', el.dataset.id);
+    if (error) return toast(errMsg(error), 'err');
+    toast('Restored'); refreshSoon();
+  },
+  async purge(el) {
+    const id = el.dataset.id;
+    if (armed !== id) {
+      armed = id; el.textContent = 'Really delete?'; el.classList.add('armed');
+      setTimeout(() => { if (armed === id) { armed = null; if (el.isConnected) { el.textContent = 'Delete forever'; el.classList.remove('armed'); } } }, 4000);
+      return;
+    }
+    armed = null;
     const { error } = await sb.from('websites').delete().eq('id', id);
     if (error) return toast(errMsg(error), 'err');
-    toast('Deleted'); closeDrawer(); refreshSoon();
+    toast('Deleted forever'); refreshSoon();
   },
   copymsg: el => copy(copyMessage(site(el.dataset.id))),
   sentbtn: el => upd(el.dataset.id, { status: 'sent' }, 'Status: Sent to Website'),
