@@ -32,7 +32,8 @@ const ymNow = () => { const d = new Date(); return `${d.getFullYear()}-${String(
 const hist = w => w.link_history || [];
 const linkNo = w => hist(w).length + 1;
 const roundDone = w => (w.deal_type === 'paid' && w.status === 'paid') || (w.deal_type === 'exchange' && w.status === 'live' && w.their_link_live);
-const nextPossible = w => roundDone(w) && linkNo(w) < (w.possible_links || 0);
+const ownBoss = w => !!S.profile && S.profile.role === 'boss' && w.member_id === S.profile.id;
+const nextPossible = w => roundDone(w) && (ownBoss(w) || linkNo(w) < (w.possible_links || 0));
 const liveCount = (w, ym) =>
   (LIVE_STATUSES.includes(w.status) && (w.live_date || '').startsWith(ym) ? 1 : 0) +
   hist(w).filter(h => (h.live_date || '').startsWith(ym)).length;
@@ -190,7 +191,7 @@ function detailHtml(w) {
   const rows = [
     ['Website', lnk(w.url)], ['Member', esc(memberName(w.member_id))], ['Contact', esc(w.contact_email || '—')],
     ['Deal', dealLabel(w.deal_type)], ['Price', money(w.price)], ['DR / Traffic', `${w.da ?? '—'} / ${w.traffic ?? '—'}`],
-    ['Status', pill(w)], ['Possible links', w.possible_links ?? '—'], ['Current link', `${linkNo(w)} / ${w.possible_links ?? '?'}`],
+    ['Status', pill(w)], ...(ownBoss(w) ? [['Current link', `${linkNo(w)}`]] : [['Possible links', w.possible_links ?? '—'], ['Current link', `${linkNo(w)} / ${w.possible_links ?? '?'}`]]),
     ['Target URL', lnk(w.target_url)], ['Anchor text', esc(w.anchor_text || '—')],
   ];
   if (w.status === 'rejected') rows.push(['Reject reason', esc(w.reject_reason || '—')]);
@@ -247,7 +248,7 @@ function managerSites() {
       <button class="btn" data-act="import">Import</button><button class="btn" data-act="export">Export CSV</button></div>
     ${rows.length ? `<div class="tablewrap"><table><thead><tr><th>Website</th><th>Name</th><th>Deal</th><th class="num">Price</th><th>DR / Traffic</th><th class="num">Links</th><th>Status</th><th>Updated</th></tr></thead><tbody>
       ${rows.map(w => `<tr data-act="open" data-id="${w.id}"><td><b>${esc(w.domain)}</b></td><td>${esc(memberName(w.member_id))}</td><td>${dealLabel(w.deal_type)}</td>
-      <td class="num">${money(w.price)}</td><td>${w.da ?? '—'} / ${w.traffic ?? '—'}</td><td class="num">${w.possible_links ? `${hist(w).length + (roundDone(w) ? 1 : 0)} / ${w.possible_links}` : '—'}</td>
+      <td class="num">${money(w.price)}</td><td>${w.da ?? '—'} / ${w.traffic ?? '—'}</td><td class="num">${ownBoss(w) ? hist(w).length + (roundDone(w) ? 1 : 0) : w.possible_links ? `${hist(w).length + (roundDone(w) ? 1 : 0)} / ${w.possible_links}` : '—'}</td>
       <td>${pill(w)}</td><td>${(w.updated_at || '').slice(0, 10)}</td></tr>`).join('')}</tbody></table></div>`
       : `<div class="empty">${all.length ? 'No websites match these filters.' : 'No websites yet. Team members add them when a site says yes, or use Import.'}</div>`}`;
 }
@@ -368,7 +369,7 @@ function sectionView(key) {
     ${d.search ? `<div class="toolbar"><input type="search" id="bq" placeholder="Search website" value="${esc(S.bossQ)}" data-input="bq"></div>` : ''}
     ${!d.list.length ? '<div class="empty">Nothing here right now.</div>' : `<div class="tablewrap"><table><thead><tr><th>Website</th><th>Name</th><th>Deal</th><th class="num">Price</th><th>DR / Traffic</th><th class="num">Links</th><th>Status</th>${extra.map(([l]) => `<th>${l}</th>`).join('')}${hasAct ? '<th>Action</th>' : ''}</tr></thead><tbody>
       ${d.list.map(w => `<tr data-act="open" data-id="${w.id}"><td><b>${esc(w.domain)}</b></td><td>${esc(memberName(w.member_id))}</td><td>${dealLabel(w.deal_type)}</td>
-      <td class="num">${money(w.price)}</td><td>${w.da ?? '—'} / ${w.traffic ?? '—'}</td><td class="num">${w.possible_links ? `${hist(w).length + (roundDone(w) ? 1 : 0)} / ${w.possible_links}` : '—'}</td>
+      <td class="num">${money(w.price)}</td><td>${w.da ?? '—'} / ${w.traffic ?? '—'}</td><td class="num">${ownBoss(w) ? hist(w).length + (roundDone(w) ? 1 : 0) : w.possible_links ? `${hist(w).length + (roundDone(w) ? 1 : 0)} / ${w.possible_links}` : '—'}</td>
       <td>${pill(w)}</td>${extra.map(([, fn]) => `<td>${fn(w)}</td>`).join('')}${hasAct ? `<td class="nowrap">${actCell(w)}</td>` : ''}</tr>`).join('')}</tbody></table></div>`}`;
 }
 

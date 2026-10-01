@@ -250,7 +250,7 @@ begin
        or (w.deal_type = 'exchange' and w.status = 'live' and w.their_link_live)) then
     raise exception 'The current link is not finished yet';
   end if;
-  if jsonb_array_length(w.link_history) + 1 >= coalesce(w.possible_links, 0) then
+  if w.member_id <> auth.uid() and jsonb_array_length(w.link_history) + 1 >= coalesce(w.possible_links, 0) then
     raise exception 'No more links are possible on this website';
   end if;
   perform set_config('app.bypass_guard', '1', true);
