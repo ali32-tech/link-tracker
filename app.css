@@ -181,3 +181,11 @@ dl.kv dd{margin:0;word-break:break-word}
 td.nowrap .btn{margin:0 6px 6px 0;padding:5px 10px;font-size:12px}td.nowrap{min-width:150px}
 
 .tablewrap::-webkit-scrollbar{display:none}
+
+/* spacing between toolbar, stats and tables */
+main .stats{margin:6px 0 24px;gap:14px}
+main .toolbar{margin:16px 0 20px}
+main .toolbar + .stats{margin-top:0}
+main h2 + .sub{margin-bottom:18px}
+main .tablewrap{margin-top:4px}
+.stat{padding:16px 18px}
