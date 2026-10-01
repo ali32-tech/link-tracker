@@ -518,7 +518,10 @@ const actions = {
   reject: el => need(el.dataset.id, 'Reject', `<label>Reason</label><select name="reason" required>${REJECT_REASONS.map(r => `<option>${r}</option>`).join('')}</select><div id="otherwrap" class="hidden"><label>Write the reason</label><input name="other_reason" maxlength="200" placeholder="Why is this website rejected?"></div>`, 'reject', 'Reject website'),
   bossedit: el => {
     const w = site(el.dataset.id);
-    need(w.id, 'Save changes', `<label>Possible links</label><input type="number" name="possible_links" min="1" required value="${w.possible_links ?? 1}">
+    const sts = ['boss_review', 'approved', 'link_ready', 'rejected'];
+    need(w.id, 'Save changes', `<label>Status</label><select name="status">${sts.map(s => `<option value="${s}" ${s === w.status ? 'selected' : ''}>${ST[s].label}</option>`).join('')}</select>
+      <div id="rejwrap" class="${w.status === 'rejected' ? '' : 'hidden'}"><label>Reject reason</label><input name="reject_reason" maxlength="200" value="${esc(w.reject_reason || '')}" placeholder="Why is this website rejected?"></div>
+      <label>Possible links</label><input type="number" name="possible_links" min="1" required value="${w.possible_links ?? 1}">
       <label>Target URL</label><input name="target_url" value="${esc(w.target_url || '')}" placeholder="https://…">
       <label>Anchor text</label><input name="anchor_text" value="${esc(w.anchor_text || '')}">`, 'bossedit', 'Edit ' + w.domain);
   },
@@ -591,7 +594,11 @@ const forms = {
     if (d.get('reason') === 'Other' && !other) return toast('Please write the reason', 'err');
     return upd(f.dataset.id, { status: 'rejected', reject_reason: d.get('reason') === 'Other' ? other : d.get('reason') }, 'Status: Rejected');
   },
-  bossedit: (f, d) => upd(f.dataset.id, { possible_links: Math.max(1, num(d.get('possible_links')) || 1), target_url: txt(d.get('target_url')), anchor_text: txt(d.get('anchor_text')) }, 'Saved'),
+  bossedit(f, d) {
+    const status = d.get('status'), reason = txt(d.get('reject_reason'));
+    if (status === 'rejected' && !reason) return toast('Please write the reject reason', 'err');
+    return upd(f.dataset.id, { status, reject_reason: status === 'rejected' ? reason : null, possible_links: Math.max(1, num(d.get('possible_links')) || 1), target_url: txt(d.get('target_url')), anchor_text: txt(d.get('anchor_text')) }, 'Saved');
+  },
   addlink: (f, d) => upd(f.dataset.id, { status: 'link_ready', target_url: txt(d.get('target_url')), anchor_text: txt(d.get('anchor_text')) }, 'Status: Link Ready'),
   async nextlink(f, d) {
     const { error } = await sb.rpc('add_next_link', { p_id: f.dataset.id, p_target: d.get('target_url'), p_anchor: d.get('anchor_text'), p_price: num(d.get('price')) });
@@ -713,6 +720,7 @@ document.addEventListener('submit', async e => {
 document.addEventListener('change', e => {
   const t = e.target;
   if (t.dataset.change) changes[t.dataset.change](t);
+  if (t.name === 'status' && $('#rejwrap')) $('#rejwrap').classList.toggle('hidden', t.value !== 'rejected');
   if (t.name === 'reason') { const o = $('#otherwrap'); if (o) o.classList.toggle('hidden', t.value !== 'Other'); }
   if (t.name === 'deal_type') { const p = $('#pricewrap'); if (p) p.classList.toggle('hidden', t.value !== 'paid'); }
 });
