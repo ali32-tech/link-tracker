@@ -191,3 +191,6 @@ main .tablewrap{margin-top:4px}
 .stat{padding:16px 18px}
 
 .nav .ico{flex:none}.nav .lbl{flex:1;min-width:0}.nav{justify-content:flex-start}.nav .count{margin-left:auto}
+
+.side{height:calc(100vh - 62px);overflow-y:auto}.nav.trashbtn{margin-top:auto}
+@media(max-width:800px){.side{height:auto}.nav.trashbtn{margin-top:0}}
