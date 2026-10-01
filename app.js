@@ -92,6 +92,8 @@ async function loadData() {
   if (role === 'manager') {
     const b = res.shift(); if (b.data) S.bossRate = +b.data.boss_rate;
     S.invites = res.shift().data || [];
+    const bosses = new Set(S.people.filter(p => p.role === 'boss').map(p => p.id));
+    S.sites = S.sites.filter(x => !bosses.has(x.member_id));
   }
 }
 
@@ -371,7 +373,7 @@ function sectionView(key) {
     ${!d.list.length ? '<div class="empty">Nothing here right now.</div>' : d.table ? `<div class="tablewrap"><table><thead><tr><th>Website</th><th>Member</th><th>Deal</th><th class="num">Price</th><th>DR / Traffic</th><th class="num">Links</th><th>Status</th><th>Updated</th>${d.actions ? '<th>Action</th>' : ''}</tr></thead><tbody>
       ${d.list.map(w => `<tr data-act="open" data-id="${w.id}"><td><b>${esc(w.domain)}</b></td><td>${esc(memberName(w.member_id))}</td><td>${dealLabel(w.deal_type)}</td>
       <td class="num">${money(w.price)}</td><td>${w.da ?? '—'} / ${w.traffic ?? '—'}</td><td class="num">${w.possible_links ? `${hist(w).length + (roundDone(w) ? 1 : 0)} / ${w.possible_links}` : '—'}</td>
-      <td>${pill(w)}</td><td>${(w.updated_at || '').slice(0, 10)}</td>${d.actions ? `<td class="nowrap">${ownActions(w)}${ownStep(w)}</td>` : ''}</tr>`).join('')}</tbody></table></div>` : `<div class="cards">${d.list.map(d.fn).join('')}</div>`}`;
+      <td>${pill(w)}</td><td>${(w.updated_at || '').slice(0, 10)}</td>${d.actions ? `<td class="nowrap">${ownActions(w)}${ownStep(w)}${S.preview ? '' : `<button class="btn sm" data-act="edit" data-id="${w.id}">Edit</button><button class="btn sm danger" data-act="del" data-id="${w.id}">Delete</button>`}</td>` : ''}</tr>`).join('')}</tbody></table></div>` : `<div class="cards">${d.list.map(d.fn).join('')}</div>`}`;
 }
 
 function sidebar() {
