@@ -205,3 +205,7 @@ main .tablewrap{margin-top:4px}
 .nav.on{background:color-mix(in srgb,var(--c) 16%,transparent);color:var(--c)}
 .nav.on .count{background:var(--c);color:#fff}
 .nav:not(.on) .count{background:color-mix(in srgb,var(--c) 14%,transparent);color:var(--c)}
+
+.stat[class*=tint-]{background:color-mix(in srgb,var(--t) 10%,var(--surface));border-color:color-mix(in srgb,var(--t) 35%,var(--border))}
+.stat[class*=tint-] b{color:var(--t)}
+.tint-blue{--t:#3B82F6}.tint-green{--t:#10B981}.tint-amber{--t:#F59E0B}.tint-purple{--t:#8B5CF6}

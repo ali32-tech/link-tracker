@@ -351,10 +351,10 @@ function sectionDefs(allWs) {
 function mineHeader(list) {
   const sum = l => l.reduce((x, w) => x + (+w.price || 0), 0);
   const due = list.filter(w => w.deal_type === 'paid' && ['live', 'invoice_received'].includes(w.status)), paid = list.filter(w => w.status === 'paid');
-  return `<div class="stats"><div class="stat"><b>${list.length}</b><span>Total websites</span></div>
-    <div class="stat"><b>${list.filter(w => LIVE_STATUSES.includes(w.status)).length}</b><span>Live links</span></div>
-    <div class="stat ${due.length ? 'hot' : ''}"><b>${due.length} · ${money(sum(due))}</b><span>Invoices due</span></div>
-    <div class="stat"><b>${paid.length} · ${money(sum(paid))}</b><span>Paid</span></div></div>`;
+  return `<div class="stats"><div class="stat tint-blue"><b>${list.length}</b><span>Total websites</span></div>
+    <div class="stat tint-green"><b>${list.filter(w => LIVE_STATUSES.includes(w.status)).length}</b><span>Live links</span></div>
+    <div class="stat tint-amber"><b>${due.length} · ${money(sum(due))}</b><span>Invoices due</span></div>
+    <div class="stat tint-purple"><b>${paid.length} · ${money(sum(paid))}</b><span>Paid</span></div></div>`;
 }
 
 function sectionView(key) {
