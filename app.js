@@ -338,6 +338,7 @@ function sectionDefs(ws) {
   const act = html => (boss ? html : '');
   const notes = w => (w.notes ? `<div><span class="k">Notes</span><br>${esc(w.notes)}</div>` : '') + (w.contact_email ? `<div><span class="k">Contact</span><br>${esc(w.contact_email)}</div>` : '');
   return {
+    mine: { label: 'My sites', sub: 'Websites you add yourself. They need no approval.', list: ws.filter(w => w.member_id === S.profile.id), fn: w => bossCard(w, '', ''), add: true },
     needs: { label: 'Needs a link (Approved)', sub: 'Approved websites that are waiting for a target URL and anchor.', list: ws.filter(w => w.status === 'approved'),
       fn: w => bossCard(w, `Possible links: <b>${w.possible_links ?? '?'}</b>`, act(B('addlink', w.id, 'Add link', true))) },
     inv: { label: 'Invoices and payments', sub: 'Paid deals that are live.', list: ws.filter(w => w.deal_type === 'paid' && ['live', 'invoice_received'].includes(w.status)),
@@ -354,6 +355,7 @@ function sectionDefs(ws) {
 function sectionView(key) {
   const d = sectionDefs(visibleSites())[key];
   return `<h2>${d.label} <span class="badge">${d.list.length}</span></h2>${d.sub ? `<p class="sub">${d.sub}</p>` : ''}
+    ${d.add ? `<div class="toolbar"><button class="btn primary" data-act="add" ${readOnly() ? 'disabled' : ''}>+ Add website</button></div>` : ''}
     ${d.search ? `<div class="toolbar"><input type="search" id="bq" placeholder="Search website" value="${esc(S.bossQ)}" data-input="bq"></div>` : ''}
     ${d.list.length ? `<div class="cards">${d.list.map(d.fn).join('')}</div>` : '<div class="empty">Nothing here right now.</div>'}`;
 }
@@ -385,7 +387,6 @@ function bossView() {
     <div class="stat ${d.needs.list.length ? 'hot' : ''}"><b>${d.needs.list.length}</b><span>Links to give</span></div>
     <div class="stat"><b>${d.inv.list.length} · ${money(due)}</b><span>Invoices / payments due</span></div>
     <div class="stat"><b>${d.exch.list.length}</b><span>Exchange links pending</span></div></div>
-    <div class="toolbar"><button class="btn primary" data-act="add" ${readOnly() ? 'disabled' : ''}>+ Add my website</button><span class="hint">Your own websites need no approval.</span></div>
     <h2>Review <span class="badge">${review.length}</span></h2><p class="sub">Websites waiting for your approval.</p>
     ${review.length ? `<div class="cards">${review.map(w => bossCard(w, notes(w),
       `${B('approve', w.id, 'Approve', true)}${B('approvelink', w.id, 'Approve + add link')}<button class="btn danger" data-act="reject" data-id="${w.id}">Reject</button>`)).join('')}</div>` : '<div class="empty">Nothing here right now.</div>'}`;
@@ -445,7 +446,6 @@ function siteForm(w) {
     <div class="grid2"><div><label>DA</label><input type="number" min="0" max="100" name="da" value="${w.da ?? ''}"></div>
     <div><label>Traffic</label><input name="traffic" maxlength="20" placeholder="e.g. 12K, 1.5M" value="${esc(w.traffic ?? '')}"></div></div>
     <div id="pricewrap" class="${w.deal_type === 'paid' ? '' : 'hidden'}"><label>Price ($)</label><input type="number" min="0" step="0.01" name="price" value="${w.price ?? ''}"></div>
-    ${eff().role === 'boss' ? `<label>Possible links <span class="hint">(how many links this website can take)</span></label><input type="number" min="1" name="possible_links" value="${w.possible_links ?? 1}">` : ''}
     <label>Notes</label><textarea name="notes">${esc(w.notes || '')}</textarea>
     <div style="margin-top:14px"><button class="btn primary big" type="submit">${w.id ? 'Save changes' : 'Add website'}</button></div></form>`;
 }
@@ -576,7 +576,6 @@ const forms = {
   async site(f, d) {
     const paid = d.get('deal_type') === 'paid';
     const row = { url: txt(d.get('url')), contact_email: txt(d.get('contact_email')), deal_type: d.get('deal_type'), da: num(d.get('da')), traffic: txt(d.get('traffic')), price: paid ? num(d.get('price')) : null, notes: txt(d.get('notes')) };
-    if (eff().role === 'boss') row.possible_links = Math.max(1, num(d.get('possible_links')) || 1);
     if (!normDomain(row.url).includes('.')) return toast('Enter a valid website URL', 'err');
     const id = f.dataset.id;
     const { error } = id ? await sb.from('websites').update(row).eq('id', id) : await sb.from('websites').insert({ ...row, member_id: S.profile.id });
