@@ -175,7 +175,7 @@ function header() {
     previewSel = `<select data-change="preview" style="width:auto" aria-label="Preview as"><option value="">Preview as…</option>${opt('boss')}${opt('member')}</select>`;
   }
   return `<div class="top"><a class="brand" href="./" style="text-decoration:none"><img src="flipbite-logo.png" alt="FlipBite">FlipBite <b>Link Tracker</b></a>
-    ${eff().role === 'boss' ? bossStats() : ''}${previewSel}${S.preview ? `<span class="tag">${esc(e.name)}</span>` : `<input class="myname" data-change="myname" value="${esc(e.name)}" maxlength="60" aria-label="Your name (click to edit)" title="Click to edit your name">`}
+    ${previewSel}${S.preview ? `<span class="tag">${esc(e.name)}</span>` : `<input class="myname" data-change="myname" value="${esc(e.name)}" maxlength="60" aria-label="Your name (click to edit)" title="Click to edit your name">`}
     <button class="btn sm" data-act="theme" aria-label="Toggle dark mode">Theme</button>
     <button class="btn sm" data-act="logout">Sign out</button></div>
     ${S.preview ? `<div class="banner">Previewing as <b>${esc(S.preview.name || S.preview.email)}</b> Read-only.
@@ -393,20 +393,13 @@ function sidebar() {
   return `<nav class="side" aria-label="Sections">${items}</nav>`;
 }
 
-function bossStats() {
-  const ws = visibleSites(), d = sectionDefs(ws);
-  const review = ws.filter(w => w.status === 'boss_review').length;
-  const due = d.inv.list.reduce((x, w) => x + (+w.price || 0), 0);
-  const chip = (k, n, label, hot) => `<button class="hstat ${hot ? 'hot' : ''}" data-act="nav" data-v="${k}"><b>${n}</b> ${label}</button>`;
-  return `<div class="hstats">${chip('home', review, 'Reviews', review)}${chip('needs', d.needs.list.length, 'Links to give', d.needs.list.length)}${chip('inv', `${d.inv.list.length} · ${money(due)}`, 'Invoices due', 0)}${chip('exch', d.exch.list.length, 'Exchange pending', 0)}</div>`;
-}
-
 function bossView() {
   const review = visibleSites().filter(w => w.status === 'boss_review');
-  const notes = w => (w.notes ? `<div><span class="k">Notes</span><br>${esc(w.notes)}</div>` : '') + (w.contact_email ? `<div><span class="k">Contact</span><br>${esc(w.contact_email)}</div>` : '');
   return `<h2>Review <span class="badge">${review.length}</span></h2><p class="sub">Websites waiting for your approval.</p>
-    ${review.length ? `<div class="cards">${review.map(w => bossCard(w, notes(w),
-      `${B('approve', w.id, 'Approve', true)}${B('approvelink', w.id, 'Approve + add link')}<button class="btn danger" data-act="reject" data-id="${w.id}">Reject</button>`)).join('')}</div>` : '<div class="empty">Nothing here right now.</div>'}`;
+    ${review.length ? `<div class="tablewrap"><table><thead><tr><th>Website</th><th>Member</th><th>Deal</th><th class="num">Price</th><th>DR / Traffic</th><th>Contact</th><th>Notes</th><th>Action</th></tr></thead><tbody>
+      ${review.map(w => `<tr data-act="open" data-id="${w.id}"><td><b>${esc(w.domain)}</b></td><td>${esc(memberName(w.member_id))}</td><td>${dealLabel(w.deal_type)}</td>
+      <td class="num">${money(w.price)}</td><td>${w.da ?? '—'} / ${w.traffic ?? '—'}</td><td>${esc(w.contact_email || '—')}</td><td>${esc(w.notes || '—')}</td>
+      <td class="nowrap">${B('approve', w.id, 'Approve', true)}${B('approvelink', w.id, 'Approve + add link')}<button class="btn danger" data-act="reject" data-id="${w.id}">Reject</button></td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">Nothing here right now.</div>'}`;
 }
 
 // ---------- Member ----------
