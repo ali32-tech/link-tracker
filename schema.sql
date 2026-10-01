@@ -276,6 +276,12 @@ begin
 end $$;
 grant execute on function public.claim_profile() to authenticated;
 
+create or replace function public.visible_to_me(m uuid) returns boolean
+language sql stable security definer set search_path = public as $$
+  select m = auth.uid() or not exists (select 1 from public.profiles where id = m and role = 'boss')
+$$;
+grant execute on function public.visible_to_me(uuid) to authenticated;
+
 -- ---------- Row Level Security ----------
 alter table public.profiles enable row level security;
 alter table public.invites enable row level security;
@@ -301,14 +307,14 @@ create policy private_settings_manager on public.private_settings for all to aut
 create policy domains_read on public.domains for select to authenticated using (true);
 
 create policy websites_read on public.websites for select to authenticated
-  using (public.auth_role() in ('manager','boss') or member_id = auth.uid());
+  using ((public.auth_role() in ('manager','boss') and public.visible_to_me(member_id)) or member_id = auth.uid());
+create policy websites_update on public.websites for update to authenticated
+  using ((public.auth_role() = 'boss' and public.visible_to_me(member_id)) or (public.auth_role() in ('member','manager') and member_id = auth.uid()))
+  with check ((public.auth_role() = 'boss' and public.visible_to_me(member_id)) or (public.auth_role() in ('member','manager') and member_id = auth.uid()));
+create policy websites_delete on public.websites for delete to authenticated
+  using ((public.auth_role() in ('manager','boss') and public.visible_to_me(member_id)) or (public.auth_role() = 'member' and member_id = auth.uid()));
 create policy websites_insert on public.websites for insert to authenticated
   with check (public.auth_role() = 'manager' or (public.auth_role() in ('member','boss') and member_id = auth.uid()));
-create policy websites_update on public.websites for update to authenticated
-  using (public.auth_role() = 'boss' or (public.auth_role() in ('member','manager') and member_id = auth.uid()))
-  with check (public.auth_role() = 'boss' or (public.auth_role() in ('member','manager') and member_id = auth.uid()));
-create policy websites_delete on public.websites for delete to authenticated
-  using (public.auth_role() in ('manager','boss') or (public.auth_role() = 'member' and member_id = auth.uid()));
 
 -- ---------- Privileges ----------
 revoke all on all tables in schema public from anon;

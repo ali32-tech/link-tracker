@@ -187,7 +187,7 @@ function kvRows(rows) {
 function detailHtml(w) {
   const rows = [
     ['Website', lnk(w.url)], ['Member', esc(memberName(w.member_id))], ['Contact', esc(w.contact_email || '—')],
-    ['Deal', dealLabel(w.deal_type)], ['Price', money(w.price)], ['DA / Traffic', `${w.da ?? '—'} / ${w.traffic ?? '—'}`],
+    ['Deal', dealLabel(w.deal_type)], ['Price', money(w.price)], ['DR / Traffic', `${w.da ?? '—'} / ${w.traffic ?? '—'}`],
     ['Status', pill(w)], ['Possible links', w.possible_links ?? '—'], ['Current link', `${linkNo(w)} / ${w.possible_links ?? '?'}`],
     ['Target URL', lnk(w.target_url)], ['Anchor text', esc(w.anchor_text || '—')],
   ];
@@ -254,7 +254,7 @@ function managerSites() {
       ${f.status || f.member || f.deal || f.q ? '<button class="btn sm" data-act="clearf">Clear filters</button>' : ''}</div>
     <div class="btns" style="margin-bottom:12px"><button class="btn primary" data-act="add">+ Add website</button><button class="btn" data-act="whatsapp">Copy WhatsApp message</button>
       <button class="btn" data-act="import">Import</button><button class="btn" data-act="export">Export CSV</button></div>
-    ${rows.length ? `<div class="tablewrap"><table><thead><tr><th>Website</th><th>Member</th><th>Deal</th><th class="num">Price</th><th>DA / Traffic</th><th class="num">Links</th><th>Status</th><th>Updated</th></tr></thead><tbody>
+    ${rows.length ? `<div class="tablewrap"><table><thead><tr><th>Website</th><th>Member</th><th>Deal</th><th class="num">Price</th><th>DR / Traffic</th><th class="num">Links</th><th>Status</th><th>Updated</th></tr></thead><tbody>
       ${rows.map(w => `<tr data-act="open" data-id="${w.id}"><td><b>${esc(w.domain)}</b></td><td>${esc(memberName(w.member_id))}</td><td>${dealLabel(w.deal_type)}</td>
       <td class="num">${money(w.price)}</td><td>${w.da ?? '—'} / ${w.traffic ?? '—'}</td><td class="num">${w.possible_links ? `${hist(w).length + (roundDone(w) ? 1 : 0)} / ${w.possible_links}` : '—'}</td>
       <td>${pill(w)}</td><td>${(w.updated_at || '').slice(0, 10)}</td></tr>`).join('')}</tbody></table></div>`
@@ -304,13 +304,13 @@ function whatsappText() {
   const inv = S.sites.filter(w => w.status === 'invoice_received');
   const total = inv.reduce((a, w) => a + (+w.price || 0), 0);
   const out = [];
-  out.push(rev.length ? `*Websites waiting for your review (${rev.length}):*\n` + rev.map((w, i) => `${i + 1}. ${w.domain} - ${dealLabel(w.deal_type)}${w.deal_type === 'paid' ? ' ' + money(w.price) : ''} - DA ${w.da ?? '?'}, traffic ${w.traffic ?? '?'} (${memberName(w.member_id)})`).join('\n') : 'No websites waiting for review.');
+  out.push(rev.length ? `*Websites waiting for your review (${rev.length}):*\n` + rev.map((w, i) => `${i + 1}. ${w.domain} - ${dealLabel(w.deal_type)}${w.deal_type === 'paid' ? ' ' + money(w.price) : ''} - DR ${w.da ?? '?'}, traffic ${w.traffic ?? '?'} (${memberName(w.member_id)})`).join('\n') : 'No websites waiting for review.');
   out.push(inv.length ? `*Invoices waiting for payment (${inv.length}, total ${money(total)}):*\n` + inv.map((w, i) => `${i + 1}. ${w.domain} - ${money(w.price)}${w.invoice_url ? ' - ' + w.invoice_url : ''}`).join('\n') : 'No invoices waiting for payment.');
   return out.join('\n\n');
 }
 
 function csvExport() {
-  const cols = ['Domain', 'URL', 'Member', 'Contact email', 'Deal', 'Price', 'DA', 'Traffic', 'Status', 'Possible links', 'Links placed', 'Target URL', 'Anchor', 'Live URL', 'Their link', 'Invoice', 'Live date', 'Paid date', 'Notes', 'Added'];
+  const cols = ['Domain', 'URL', 'Member', 'Contact email', 'Deal', 'Price', 'DR', 'Traffic', 'Status', 'Possible links', 'Links placed', 'Target URL', 'Anchor', 'Live URL', 'Their link', 'Invoice', 'Live date', 'Paid date', 'Notes', 'Added'];
   const q = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
   const lines = [cols.map(q).join(',')].concat(S.sites.map(w => [w.domain, w.url, memberName(w.member_id), w.contact_email, dealLabel(w.deal_type), w.price, w.da, w.traffic,
     ST[w.status].label, w.possible_links, hist(w).length + (LIVE_STATUSES.includes(w.status) ? 1 : 0), w.target_url, w.anchor_text, w.live_url, w.their_link, w.invoice_url, w.live_date, w.paid_date, w.notes, (w.created_at || '').slice(0, 10)].map(q).join(',')));
@@ -324,7 +324,7 @@ function csvExport() {
 function bossCard(w, extra, btns) {
   const badge = (w.possible_links > 1 || hist(w).length) ? `<span class="badge">Link ${linkNo(w)} / ${w.possible_links ?? '?'}</span>` : '';
   return `<article class="card"><div class="row"><span class="dom">${esc(w.domain)}</span>${pill(w)}</div>
-    <div class="meta"><span>${dealLabel(w.deal_type)}</span>${w.deal_type === 'paid' ? `<span>${money(w.price)}</span>` : ''}<span>by ${esc(memberName(w.member_id))}</span><span>DA ${w.da ?? '—'}</span><span>Traffic ${w.traffic ?? '—'}</span>${badge}</div>
+    <div class="meta"><span>${dealLabel(w.deal_type)}</span>${w.deal_type === 'paid' ? `<span>${money(w.price)}</span>` : ''}<span>by ${esc(memberName(w.member_id))}</span><span>DR ${w.da ?? '—'}</span><span>Traffic ${w.traffic ?? '—'}</span>${badge}</div>
     ${extra ? `<div class="next">${extra}</div>` : ''}
     <div class="foot" style="flex-wrap:wrap">${btns}${ownStep(w)}<button class="btn sm" data-act="open" data-id="${w.id}">Details</button></div></article>`;
 }
@@ -333,12 +333,23 @@ const ownStep = w => (w.member_id !== S.profile.id || S.preview ? '' : w.status 
   : w.status === 'sent' ? `<button class="btn primary" data-act="livebtn" data-id="${w.id}">Link is live</button>` : '');
 const B = (act, id, label, primary) => `<button class="btn ${primary ? 'primary' : ''}" data-act="${act}" data-id="${id}">${label}</button>`;
 
-function sectionDefs(ws) {
+const ownActions = w => {
+  if (S.preview) return '';
+  if (w.status === 'approved') return B('addlink', w.id, 'Add link', true);
+  if (w.deal_type === 'paid' && w.status === 'live') return B('invoice', w.id, 'Invoice received', true);
+  if (w.deal_type === 'paid' && w.status === 'invoice_received') return B('paid', w.id, 'Mark as paid', true);
+  if (w.deal_type === 'exchange' && w.status === 'live' && !w.their_link_live) return B('theirlive', w.id, 'Their link is live', true);
+  if (nextPossible(w)) return B('nextlink', w.id, 'Add next link', true);
+  return '';
+};
+
+function sectionDefs(allWs) {
+  const mineList = allWs.filter(w => w.member_id === S.profile.id), ws = allWs.filter(w => w.member_id !== S.profile.id);
   const boss = eff().role === 'boss';
   const act = html => (boss ? html : '');
   const notes = w => (w.notes ? `<div><span class="k">Notes</span><br>${esc(w.notes)}</div>` : '') + (w.contact_email ? `<div><span class="k">Contact</span><br>${esc(w.contact_email)}</div>` : '');
   return {
-    mine: { label: 'My sites', sub: 'Websites you add yourself. They need no approval.', list: ws.filter(w => w.member_id === S.profile.id), fn: w => bossCard(w, '', ''), add: true },
+    mine: { label: 'My websites', sub: 'Websites you add yourself. They need no approval and nobody else can see them.', list: mineList, fn: w => bossCard(w, w.status === 'approved' ? `Possible links: <b>${w.possible_links ?? 1}</b>` : '', ownActions(w)), add: true },
     needs: { label: 'Needs a link (Approved)', sub: 'Approved websites that are waiting for a target URL and anchor.', list: ws.filter(w => w.status === 'approved'),
       fn: w => bossCard(w, `Possible links: <b>${w.possible_links ?? '?'}</b>`, act(B('addlink', w.id, 'Add link', true))) },
     inv: { label: 'Invoices and payments', sub: 'Paid deals that are live.', list: ws.filter(w => w.deal_type === 'paid' && ['live', 'invoice_received'].includes(w.status)),
@@ -348,7 +359,7 @@ function sectionDefs(ws) {
       fn: w => bossCard(w, `<div><span class="k">Our live link</span><br>${lnk(w.live_url)}</div><div><span class="k">Their link</span><br>${lnk(w.their_link)}</div>`, act(B('theirlive', w.id, 'Their link is live', true))) },
     next: { label: 'Next link possible on the same website', sub: 'Finished websites that can take more links.', list: ws.filter(nextPossible),
       fn: w => bossCard(w, `Links placed: <b>${linkNo(w)}</b> of ${w.possible_links}`, act(B('nextlink', w.id, 'Add next link', true))) },
-    all: { label: 'All websites', sub: '', list: ws.filter(w => !S.bossQ.trim() || w.domain.includes(S.bossQ.trim().toLowerCase())), fn: w => bossCard(w, '', ''), search: true },
+    all: { label: 'All websites', sub: '', list: ws.filter(w => !S.bossQ.trim() || w.domain.includes(S.bossQ.trim().toLowerCase())), table: true, search: true },
   };
 }
 
@@ -357,7 +368,10 @@ function sectionView(key) {
   return `<h2>${d.label} <span class="badge">${d.list.length}</span></h2>${d.sub ? `<p class="sub">${d.sub}</p>` : ''}
     ${d.add ? `<div class="toolbar"><button class="btn primary" data-act="add" ${readOnly() ? 'disabled' : ''}>+ Add website</button></div>` : ''}
     ${d.search ? `<div class="toolbar"><input type="search" id="bq" placeholder="Search website" value="${esc(S.bossQ)}" data-input="bq"></div>` : ''}
-    ${d.list.length ? `<div class="cards">${d.list.map(d.fn).join('')}</div>` : '<div class="empty">Nothing here right now.</div>'}`;
+    ${!d.list.length ? '<div class="empty">Nothing here right now.</div>' : d.table ? `<div class="tablewrap"><table><thead><tr><th>Website</th><th>Member</th><th>Deal</th><th class="num">Price</th><th>DR / Traffic</th><th class="num">Links</th><th>Status</th><th>Updated</th></tr></thead><tbody>
+      ${d.list.map(w => `<tr data-act="open" data-id="${w.id}"><td><b>${esc(w.domain)}</b></td><td>${esc(memberName(w.member_id))}</td><td>${dealLabel(w.deal_type)}</td>
+      <td class="num">${money(w.price)}</td><td>${w.da ?? '—'} / ${w.traffic ?? '—'}</td><td class="num">${w.possible_links ? `${hist(w).length + (roundDone(w) ? 1 : 0)} / ${w.possible_links}` : '—'}</td>
+      <td>${pill(w)}</td><td>${(w.updated_at || '').slice(0, 10)}</td></tr>`).join('')}</tbody></table></div>` : `<div class="cards">${d.list.map(d.fn).join('')}</div>`}`;
 }
 
 function sidebar() {
@@ -443,7 +457,7 @@ function siteForm(w) {
     <div id="dup"></div>
     <label>Contact email</label><input type="email" name="contact_email" value="${esc(w.contact_email || '')}">
     <label>Deal type</label><select name="deal_type"><option value="exchange" ${w.deal_type === 'exchange' ? 'selected' : ''}>Exchange</option><option value="paid" ${w.deal_type === 'paid' ? 'selected' : ''}>Paid</option></select>
-    <div class="grid2"><div><label>DA</label><input type="number" min="0" max="100" name="da" value="${w.da ?? ''}"></div>
+    <div class="grid2"><div><label>DR</label><input type="number" min="0" max="100" name="da" value="${w.da ?? ''}"></div>
     <div><label>Traffic</label><input name="traffic" maxlength="20" placeholder="e.g. 12K, 1.5M" value="${esc(w.traffic ?? '')}"></div></div>
     <div id="pricewrap" class="${w.deal_type === 'paid' ? '' : 'hidden'}"><label>Price ($)</label><input type="number" min="0" step="0.01" name="price" value="${w.price ?? ''}"></div>
     <label>Notes</label><textarea name="notes">${esc(w.notes || '')}</textarea>
@@ -491,7 +505,7 @@ const actions = {
   open: el => openDetail(el.dataset.id),
   whatsapp: () => copy(whatsappText()),
   export: csvExport,
-  import: () => openDrawer('Import websites', `<form data-form="import"><p class="hint">Upload a CSV file, or paste one website per line: <b>url, email, exchange/paid, price, member name, DA, traffic</b>. Leave the member blank to add it to yourself. Duplicates are skipped.</p>
+  import: () => openDrawer('Import websites', `<form data-form="import"><p class="hint">Upload a CSV file, or paste one website per line: <b>url, email, exchange/paid, price, member name, DR, traffic</b>. Leave the member blank to add it to yourself. Duplicates are skipped.</p>
     <label>CSV file</label><input type="file" accept=".csv,.txt,text/csv" data-change="csvfile">
     <label>Or paste rows</label><textarea name="rows" rows="10" required placeholder="example.com, info@example.com, paid, 150, Sara, 45, 12K"></textarea>
     <div style="margin-top:14px"><button class="btn primary big" type="submit">Import</button></div><div id="importres"></div></form>`, 'form'),
