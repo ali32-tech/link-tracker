@@ -311,13 +311,6 @@ function csvExport() {
 }
 
 // ---------- Boss ----------
-function bossCard(w, extra, btns) {
-  const badge = (w.possible_links > 1 || hist(w).length) ? `<span class="badge">Link ${linkNo(w)} / ${w.possible_links ?? '?'}</span>` : '';
-  return `<article class="card"><div class="row"><span class="dom">${esc(w.domain)}</span>${pill(w)}</div>
-    <div class="meta"><span>${dealLabel(w.deal_type)}</span>${w.deal_type === 'paid' ? `<span>${money(w.price)}</span>` : ''}<span>by ${esc(memberName(w.member_id))}</span><span>DR ${w.da ?? '—'}</span><span>Traffic ${w.traffic ?? '—'}</span>${badge}</div>
-    ${extra ? `<div class="next">${extra}</div>` : ''}
-    <div class="foot" style="flex-wrap:wrap">${btns}${ownStep(w)}<button class="btn sm" data-act="open" data-id="${w.id}">Details</button></div></article>`;
-}
 const ownStep = w => (w.member_id !== S.profile.id || S.preview ? '' : w.status === 'link_ready'
   ? `<button class="btn" data-act="copymsg" data-id="${w.id}">Copy message for website</button><button class="btn primary" data-act="sentbtn" data-id="${w.id}">Link sent to website</button>`
   : w.status === 'sent' ? `<button class="btn primary" data-act="livebtn" data-id="${w.id}">Link is live</button>` : '');
@@ -335,33 +328,34 @@ const ownActions = w => {
 
 function sectionDefs(allWs) {
   const mineList = allWs.filter(w => w.member_id === S.profile.id), ws = allWs.filter(w => w.member_id !== S.profile.id);
-  const boss = eff().role === 'boss';
-  const act = html => (boss ? html : '');
-  const notes = w => (w.notes ? `<div><span class="k">Notes</span><br>${esc(w.notes)}</div>` : '') + (w.contact_email ? `<div><span class="k">Contact</span><br>${esc(w.contact_email)}</div>` : '');
+  const act = html => (eff().role === 'boss' ? html : '');
   return {
-    mine: { label: 'My websites', sub: 'Websites you add yourself. They need no approval and nobody else can see them.', list: mineList, table: true, actions: true, add: true },
+    mine: { label: 'My websites', sub: 'Websites you add yourself. They need no approval and nobody else can see them.', list: mineList, add: true, own: true },
     needs: { label: 'Needs a link (Approved)', sub: 'Approved websites that are waiting for a target URL and anchor.', list: ws.filter(w => w.status === 'approved'),
-      fn: w => bossCard(w, `Possible links: <b>${w.possible_links ?? '?'}</b>`, act(B('addlink', w.id, 'Add link', true))) },
+      extra: [['Possible links', w => w.possible_links ?? '?']], act: w => act(B('addlink', w.id, 'Add link', true)) },
     inv: { label: 'Invoices and payments', sub: 'Paid deals that are live.', list: ws.filter(w => w.deal_type === 'paid' && ['live', 'invoice_received'].includes(w.status)),
-      fn: w => bossCard(w, `<div><span class="k">Our live link</span><br>${lnk(w.live_url)}</div><div><span class="k">Invoice</span><br>${w.invoice_url ? lnk(w.invoice_url) : 'No invoice link yet'}</div><div><span class="k">Amount</span><br>${money(w.price)}</div>`,
-        act(w.status === 'live' ? B('invoice', w.id, 'Invoice received', true) : B('paid', w.id, 'Mark as paid', true))) },
+      extra: [['Our live link', w => lnk(w.live_url)], ['Invoice', w => (w.invoice_url ? lnk(w.invoice_url) : 'No invoice link yet')]],
+      act: w => act(w.status === 'live' ? B('invoice', w.id, 'Invoice received', true) : B('paid', w.id, 'Mark as paid', true)) },
     exch: { label: 'Exchange links to place', sub: 'Exchange deals that are live. Place their link somewhere.', list: ws.filter(w => w.deal_type === 'exchange' && w.status === 'live' && !w.their_link_live),
-      fn: w => bossCard(w, `<div><span class="k">Our live link</span><br>${lnk(w.live_url)}</div><div><span class="k">Their link</span><br>${lnk(w.their_link)}</div>`, act(B('theirlive', w.id, 'Their link is live', true))) },
+      extra: [['Our live link', w => lnk(w.live_url)], ['Their link', w => lnk(w.their_link)]], act: w => act(B('theirlive', w.id, 'Their link is live', true)) },
     next: { label: 'Next link possible on the same website', sub: 'Finished websites that can take more links.', list: ws.filter(nextPossible),
-      fn: w => bossCard(w, `Links placed: <b>${linkNo(w)}</b> of ${w.possible_links}`, act(B('nextlink', w.id, 'Add next link', true))) },
-    all: { label: 'All websites', sub: '', list: ws.filter(w => !S.bossQ.trim() || w.domain.includes(S.bossQ.trim().toLowerCase())), table: true, search: true },
+      extra: [['Links placed', w => `${linkNo(w)} of ${w.possible_links}`]], act: w => act(B('nextlink', w.id, 'Add next link', true)) },
+    all: { label: 'All websites', sub: '', list: ws.filter(w => !S.bossQ.trim() || w.domain.includes(S.bossQ.trim().toLowerCase())), search: true },
   };
 }
 
 function sectionView(key) {
   const d = sectionDefs(visibleSites())[key];
+  const extra = d.extra || [['Updated', w => (w.updated_at || '').slice(0, 10)]];
+  const hasAct = d.own || d.act;
+  const actCell = w => (d.own ? `${ownActions(w)}${ownStep(w)}${S.preview ? '' : `<button class="btn sm" data-act="edit" data-id="${w.id}">Edit</button><button class="btn sm danger" data-act="del" data-id="${w.id}">Delete</button>`}` : d.act(w));
   return `<h2>${d.label} <span class="badge">${d.list.length}</span></h2>${d.sub ? `<p class="sub">${d.sub}</p>` : ''}
     ${d.add ? `<div class="toolbar"><button class="btn primary" data-act="add" ${readOnly() ? 'disabled' : ''}>+ Add website</button></div>` : ''}
     ${d.search ? `<div class="toolbar"><input type="search" id="bq" placeholder="Search website" value="${esc(S.bossQ)}" data-input="bq"></div>` : ''}
-    ${!d.list.length ? '<div class="empty">Nothing here right now.</div>' : d.table ? `<div class="tablewrap"><table><thead><tr><th>Website</th><th>Name</th><th>Deal</th><th class="num">Price</th><th>DR / Traffic</th><th class="num">Links</th><th>Status</th><th>Updated</th>${d.actions ? '<th>Action</th>' : ''}</tr></thead><tbody>
+    ${!d.list.length ? '<div class="empty">Nothing here right now.</div>' : `<div class="tablewrap"><table><thead><tr><th>Website</th><th>Name</th><th>Deal</th><th class="num">Price</th><th>DR / Traffic</th><th class="num">Links</th><th>Status</th>${extra.map(([l]) => `<th>${l}</th>`).join('')}${hasAct ? '<th>Action</th>' : ''}</tr></thead><tbody>
       ${d.list.map(w => `<tr data-act="open" data-id="${w.id}"><td><b>${esc(w.domain)}</b></td><td>${esc(memberName(w.member_id))}</td><td>${dealLabel(w.deal_type)}</td>
       <td class="num">${money(w.price)}</td><td>${w.da ?? '—'} / ${w.traffic ?? '—'}</td><td class="num">${w.possible_links ? `${hist(w).length + (roundDone(w) ? 1 : 0)} / ${w.possible_links}` : '—'}</td>
-      <td>${pill(w)}</td><td>${(w.updated_at || '').slice(0, 10)}</td>${d.actions ? `<td class="nowrap">${ownActions(w)}${ownStep(w)}${S.preview ? '' : `<button class="btn sm" data-act="edit" data-id="${w.id}">Edit</button><button class="btn sm danger" data-act="del" data-id="${w.id}">Delete</button>`}</td>` : ''}</tr>`).join('')}</tbody></table></div>` : `<div class="cards">${d.list.map(d.fn).join('')}</div>`}`;
+      <td>${pill(w)}</td>${extra.map(([, fn]) => `<td>${fn(w)}</td>`).join('')}${hasAct ? `<td class="nowrap">${actCell(w)}</td>` : ''}</tr>`).join('')}</tbody></table></div>`}`;
 }
 
 function sidebar() {
