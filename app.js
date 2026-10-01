@@ -354,12 +354,20 @@ function sectionView(key) {
 }
 
 function sidebar() {
-  const role = eff().role, ws = visibleSites(), d = sectionDefs(ws);
-  const home = { boss: 'Review', manager: 'Websites', member: 'My websites' }[role];
-  const items = [['home', home, role === 'boss' ? ws.filter(w => w.status === 'boss_review').length : null]];
-  if (role === 'manager') items.push(['commission', 'Commission', null], ['settings', 'Settings', null]);
-  const btn = ([k, l, n]) => `<button class="nav ${S.nav === k ? 'on' : ''}" data-act="nav" data-v="${k}">${l}${n != null ? `<span class="count">${n}</span>` : ''}</button>`;
-  return `<nav class="side" aria-label="Sections">${items.map(btn).join('')}<div class="sep"></div>${Object.keys(d).map(k => btn([k, d[k].label, d[k].list.length])).join('')}</nav>`;
+  const role = eff().role, ws = visibleSites();
+  const btn = (k, l, n, on, act = 'nav') => `<button class="nav ${on ? 'on' : ''}" data-act="${act}" data-v="${k}">${l}${n != null ? `<span class="count">${n}</span>` : ''}</button>`;
+  let items = '';
+  if (role === 'boss') {
+    const d = sectionDefs(ws);
+    items = btn('home', 'Review', ws.filter(w => w.status === 'boss_review').length, S.nav === 'home') + '<div class="sep"></div>' +
+      Object.keys(d).map(k => btn(k, d[k].label, d[k].list.length, S.nav === k)).join('');
+  } else if (role === 'manager') {
+    items = [['home', 'Websites'], ['commission', 'Commission'], ['settings', 'Settings']].map(([k, l]) => btn(k, l, null, S.nav === k)).join('');
+  } else {
+    const cnt = { all: () => true, action: needsAction, boss: w => ['boss_review', 'approved'].includes(w.status), live: w => LIVE_STATUSES.includes(w.status), rejected: w => w.status === 'rejected' };
+    items = [['all', 'All'], ['action', 'Action needed'], ['boss', 'Under review'], ['live', 'Live'], ['rejected', 'Rejected']].map(([k, l]) => btn(k, l, ws.filter(cnt[k]).length, S.mem.f === k, 'mfilter')).join('');
+  }
+  return `<nav class="side" aria-label="Sections">${items}</nav>`;
 }
 
 function bossView() {
@@ -390,13 +398,11 @@ function memberView() {
     live: w => LIVE_STATUSES.includes(w.status), rejected: w => w.status === 'rejected',
   }[f];
   const list = ws.filter(w => filt(w) && (!q || w.domain.includes(q)));
-  const chips = [['all', 'All'], ['action', 'Action needed'], ['boss', 'Under review'], ['live', 'Live'], ['rejected', 'Rejected']];
   return `<div class="stats"><div class="stat"><b>${ws.length}</b><span>My websites</span></div>
     <div class="stat ${ws.filter(needsAction).length ? 'hot' : ''}"><b>${ws.filter(needsAction).length}</b><span>Action needed</span></div>
     <div class="stat"><b>${live}</b><span>Live this month</span></div><div class="stat"><b>${money(live * S.teamRate)}</b><span>My earnings this month</span></div></div>
     <div class="toolbar"><button class="btn primary" data-act="add" ${readOnly() ? 'disabled' : ''}>+ Add website</button>
       <input type="search" id="memq" placeholder="Search" value="${esc(S.mem.q)}" data-input="memq"></div>
-    <div class="chips" style="margin-bottom:14px">${chips.map(([k, l]) => `<button class="chip ${f === k ? 'on' : ''}" data-act="mfilter" data-v="${k}">${l}</button>`).join('')}</div>
     ${list.length ? `<div class="cards">${list.map(memberCard).join('')}</div>` :
       `<div class="empty">${ws.length ? 'No websites in this view.' : 'No websites yet. Click + Add website when a site says yes.'}</div>`}`;
 }
@@ -448,7 +454,7 @@ function render() {
   const a = document.activeElement, focus = a && a.id ? { id: a.id, s: a.selectionStart, e: a.selectionEnd } : null;
   const role = eff().role;
   if (['commission', 'settings'].includes(S.nav) && role !== 'manager') S.nav = 'home';
-  const body = S.nav !== 'home' && sectionDefs(visibleSites())[S.nav] ? sectionView(S.nav) : role === 'manager' ? managerView() : role === 'boss' ? bossView() : memberView();
+  const body = role === 'boss' && S.nav !== 'home' && sectionDefs(visibleSites())[S.nav] ? sectionView(S.nav) : role === 'manager' ? managerView() : role === 'boss' ? bossView() : memberView();
   app.innerHTML = header() + `<div class="layout">${sidebar()}<main>${body}</main></div>`;
   if (focus) { const n = document.getElementById(focus.id); if (n) { n.focus(); try { n.setSelectionRange(focus.s, focus.e); } catch (e) {} } }
 }
