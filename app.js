@@ -16,7 +16,6 @@ const ST = {
   invoice_received: { label: 'Invoice Received', cls: 'amber' },
   paid: { label: 'Paid', cls: 'green' },
 };
-const BOSS_STATUSES = ['boss_review', 'approved', 'rejected', 'link_ready', 'invoice_received', 'paid'];
 const LIVE_STATUSES = ['live', 'invoice_received', 'paid'];
 const REJECT_REASONS = ['Already has our link', "Don't like it", 'Too expensive', 'Low traffic', 'Other'];
 
@@ -222,17 +221,6 @@ function openDetail(id) {
     const step = !own ? '' : w.status === 'link_ready' ? `<button class="btn" data-act="copymsg" data-id="${w.id}">Copy message for website</button><button class="btn primary" data-act="sentbtn" data-id="${w.id}">Link sent to website</button>`
       : w.status === 'sent' ? `<button class="btn primary" data-act="livebtn" data-id="${w.id}">Link is live</button>` : '';
     extra = `<div class="btns" style="margin-top:14px">${step}${own ? `<button class="btn" data-act="edit" data-id="${w.id}">Edit</button>` : ''}<button class="btn danger" data-act="del" data-id="${w.id}">Delete</button></div>`;
-  } else if (role === 'boss') {
-    const sel = BOSS_STATUSES.includes(w.status) ? '' : `<option value="${w.status}" selected disabled>${ST[w.status].label} (current)</option>`;
-    extra = `<h2 style="font-size:15px">Correct a mistake</h2>
-      <form data-form="correct" data-id="${w.id}">
-      <label>Status</label><select name="status">${sel}${BOSS_STATUSES.map(s => `<option value="${s}" ${s === w.status ? 'selected' : ''}>${ST[s].label}</option>`).join('')}</select>
-      <div class="grid2"><div><label>Possible links</label><input type="number" min="1" name="possible_links" value="${w.possible_links ?? ''}"></div>
-      <div><label>Reject reason</label><select name="reject_reason"><option value=""></option>${REJECT_REASONS.map(r => `<option ${w.reject_reason === r ? 'selected' : ''}>${r}</option>`).join('')}</select></div></div>
-      <label>Target URL</label><input name="target_url" value="${esc(w.target_url || '')}">
-      <label>Anchor text</label><input name="anchor_text" value="${esc(w.anchor_text || '')}">
-      <div style="margin-top:14px"><button class="btn primary big" type="submit" ${readOnly() ? 'disabled' : ''}>Save changes</button></div></form>
-      <div class="btns" style="margin-top:14px">${ownStep(w)}${w.member_id === S.profile.id && !S.preview ? `<button class="btn" data-act="edit" data-id="${w.id}">Edit</button>` : ''}<button class="btn danger" data-act="del" data-id="${w.id}">Delete website</button></div>`;
   }
   openDrawer(w.domain, detailHtml(w) + extra, 'detail', w.id);
 }
@@ -531,7 +519,7 @@ const actions = {
   },
   approve: el => need(el.dataset.id, 'Approve', `<label>Possible links <span class="hint">(how many links this website can take)</span></label><input type="number" name="possible_links" min="1" required value="1">`, 'approve', 'Approve website'),
   approvelink: el => need(el.dataset.id, 'Approve and send link', `<label>Possible links</label><input type="number" name="possible_links" min="1" required value="1">${linkFields}`, 'approvelink', 'Approve + add link'),
-  reject: el => need(el.dataset.id, 'Reject', `<label>Reason</label><select name="reason" required>${REJECT_REASONS.map(r => `<option>${r}</option>`).join('')}</select>`, 'reject', 'Reject website'),
+  reject: el => need(el.dataset.id, 'Reject', `<label>Reason</label><select name="reason" required>${REJECT_REASONS.map(r => `<option>${r}</option>`).join('')}</select><div id="otherwrap" class="hidden"><label>Write the reason</label><input name="other_reason" maxlength="200" placeholder="Why is this website rejected?"></div>`, 'reject', 'Reject website'),
   addlink: el => need(el.dataset.id, 'Save link', linkFields, 'addlink', 'Add link'),
   invoice: el => upd(el.dataset.id, { status: 'invoice_received' }, 'Status: Invoice Received'),
   paid: el => upd(el.dataset.id, { status: 'paid' }, 'Status: Paid'),
@@ -595,19 +583,16 @@ const forms = {
   live: (f, d) => upd(f.dataset.id, { status: 'live', live_url: txt(d.get('live_url')), their_link: txt(d.get('their_link')), invoice_url: txt(d.get('invoice_url')) }, 'Status: Live'),
   approve: (f, d) => upd(f.dataset.id, { status: 'approved', possible_links: num(d.get('possible_links')) }, 'Status: Approved'),
   approvelink: (f, d) => upd(f.dataset.id, { status: 'link_ready', possible_links: num(d.get('possible_links')), target_url: txt(d.get('target_url')), anchor_text: txt(d.get('anchor_text')) }, 'Status: Link Ready'),
-  reject: (f, d) => upd(f.dataset.id, { status: 'rejected', reject_reason: d.get('reason') }, 'Status: Rejected'),
+  reject: (f, d) => {
+    const other = txt(d.get('other_reason'));
+    if (d.get('reason') === 'Other' && !other) return toast('Please write the reason', 'err');
+    return upd(f.dataset.id, { status: 'rejected', reject_reason: d.get('reason') === 'Other' ? other : d.get('reason') }, 'Status: Rejected');
+  },
   addlink: (f, d) => upd(f.dataset.id, { status: 'link_ready', target_url: txt(d.get('target_url')), anchor_text: txt(d.get('anchor_text')) }, 'Status: Link Ready'),
   async nextlink(f, d) {
     const { error } = await sb.rpc('add_next_link', { p_id: f.dataset.id, p_target: d.get('target_url'), p_anchor: d.get('anchor_text'), p_price: num(d.get('price')) });
     if (error) return toast(errMsg(error), 'err');
     toast('Status: Link Ready'); closeDrawer(); refreshSoon();
-  },
-  correct(f, d) {
-    const w = site(f.dataset.id), patch = {};
-    if (d.get('status') && d.get('status') !== w.status) patch.status = d.get('status');
-    patch.possible_links = num(d.get('possible_links')); patch.target_url = txt(d.get('target_url'));
-    patch.anchor_text = txt(d.get('anchor_text')); patch.reject_reason = txt(d.get('reject_reason'));
-    return upd(w.id, patch, 'Saved');
   },
   async rolepw(f, d) {
     const pr = S.pendingRole;
@@ -724,6 +709,7 @@ document.addEventListener('submit', async e => {
 document.addEventListener('change', e => {
   const t = e.target;
   if (t.dataset.change) changes[t.dataset.change](t);
+  if (t.name === 'reason') { const o = $('#otherwrap'); if (o) o.classList.toggle('hidden', t.value !== 'Other'); }
   if (t.name === 'deal_type') { const p = $('#pricewrap'); if (p) p.classList.toggle('hidden', t.value !== 'paid'); }
 });
 document.addEventListener('input', e => {
