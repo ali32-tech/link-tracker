@@ -393,17 +393,20 @@ function sidebar() {
   return `<nav class="side" aria-label="Sections">${items}</nav>`;
 }
 
-function bossView() {
-  const ws = visibleSites();
-  const d = sectionDefs(ws);
+function bossStats() {
+  const ws = visibleSites(), d = sectionDefs(ws);
   const review = ws.filter(w => w.status === 'boss_review');
   const due = d.inv.list.reduce((a, w) => a + (+w.price || 0), 0);
-  const notes = w => (w.notes ? `<div><span class="k">Notes</span><br>${esc(w.notes)}</div>` : '') + (w.contact_email ? `<div><span class="k">Contact</span><br>${esc(w.contact_email)}</div>` : '');
-  return `<div class="stats"><div class="stat ${review.length ? 'hot' : ''}"><b>${review.length}</b><span>Reviews pending</span></div>
+  return `<div class="topstats"><div class="stats"><div class="stat ${review.length ? 'hot' : ''}"><b>${review.length}</b><span>Reviews pending</span></div>
     <div class="stat ${d.needs.list.length ? 'hot' : ''}"><b>${d.needs.list.length}</b><span>Links to give</span></div>
     <div class="stat"><b>${d.inv.list.length} · ${money(due)}</b><span>Invoices / payments due</span></div>
-    <div class="stat"><b>${d.exch.list.length}</b><span>Exchange links pending</span></div></div>
-    <h2>Review <span class="badge">${review.length}</span></h2><p class="sub">Websites waiting for your approval.</p>
+    <div class="stat"><b>${d.exch.list.length}</b><span>Exchange links pending</span></div></div></div>`;
+}
+
+function bossView() {
+  const review = visibleSites().filter(w => w.status === 'boss_review');
+  const notes = w => (w.notes ? `<div><span class="k">Notes</span><br>${esc(w.notes)}</div>` : '') + (w.contact_email ? `<div><span class="k">Contact</span><br>${esc(w.contact_email)}</div>` : '');
+  return `<h2>Review <span class="badge">${review.length}</span></h2><p class="sub">Websites waiting for your approval.</p>
     ${review.length ? `<div class="cards">${review.map(w => bossCard(w, notes(w),
       `${B('approve', w.id, 'Approve', true)}${B('approvelink', w.id, 'Approve + add link')}<button class="btn danger" data-act="reject" data-id="${w.id}">Reject</button>`)).join('')}</div>` : '<div class="empty">Nothing here right now.</div>'}`;
 }
@@ -478,7 +481,7 @@ function render() {
   const role = eff().role;
   if (['commission', 'settings'].includes(S.nav) && role !== 'manager') S.nav = 'home';
   const body = role === 'boss' && S.nav !== 'home' && sectionDefs(visibleSites())[S.nav] ? sectionView(S.nav) : role === 'manager' ? managerView() : role === 'boss' ? bossView() : memberView();
-  app.innerHTML = header() + `<div class="layout">${sidebar()}<main>${body}</main></div>`;
+  app.innerHTML = header() + (role === 'boss' ? bossStats() : '') + `<div class="layout">${sidebar()}<main>${body}</main></div>`;
   if (focus) { const n = document.getElementById(focus.id); if (n) { n.focus(); try { n.setSelectionRange(focus.s, focus.e); } catch (e) {} } }
 }
 
