@@ -40,7 +40,7 @@ const errMsg = e => (e && e.code === '23505' ? 'This website is already in the t
 
 const S = {
   session: null, profile: null, sites: [], people: [], invites: [], teamRate: 7, bossRate: 10,
-  nav: 'home', mf: { status: '', member: '', deal: '', q: '' }, mem: { f: 'all', q: '' }, mineF: 'all', bossQ: '',
+  nav: 'home', mf: { status: '', member: '', deal: '', q: '' }, mem: { f: 'all', q: '' }, bossQ: '',
   month: ymNow(), preview: null, drawer: null, chan: null,
 };
 let sb = null, armed = null, refreshTimer = null;
@@ -345,30 +345,18 @@ function sectionDefs(allWs) {
   };
 }
 
-const MINE_GROUPS = [
-  ['all', 'All', () => true],
-  ['approved', 'Needs a link', w => w.status === 'approved'],
-  ['link_ready', 'Link ready', w => w.status === 'link_ready'],
-  ['sent', 'Sent', w => w.status === 'sent'],
-  ['live', 'Live', w => w.status === 'live' && w.deal_type !== 'paid'],
-  ['invoice', 'Invoice due', w => w.deal_type === 'paid' && ['live', 'invoice_received'].includes(w.status)],
-  ['paid', 'Paid', w => w.status === 'paid'],
-];
-
 function mineHeader(list) {
   const sum = l => l.reduce((x, w) => x + (+w.price || 0), 0);
-  const due = list.filter(MINE_GROUPS[5][2]), paid = list.filter(MINE_GROUPS[6][2]);
+  const due = list.filter(w => w.deal_type === 'paid' && ['live', 'invoice_received'].includes(w.status)), paid = list.filter(w => w.status === 'paid');
   return `<div class="stats"><div class="stat"><b>${list.length}</b><span>Total websites</span></div>
     <div class="stat"><b>${list.filter(w => LIVE_STATUSES.includes(w.status)).length}</b><span>Live links</span></div>
     <div class="stat ${due.length ? 'hot' : ''}"><b>${due.length} · ${money(sum(due))}</b><span>Invoices due</span></div>
-    <div class="stat"><b>${paid.length} · ${money(sum(paid))}</b><span>Paid</span></div></div>
-    <div class="chips" style="margin-bottom:14px">${MINE_GROUPS.map(([k, l, fn]) => `<button class="chip ${S.mineF === k ? 'on' : ''}" data-act="minefilter" data-v="${k}">${l} ${list.filter(fn).length}</button>`).join('')}</div>`;
+    <div class="stat"><b>${paid.length} · ${money(sum(paid))}</b><span>Paid</span></div></div>`;
 }
 
 function sectionView(key) {
   const d = sectionDefs(visibleSites())[key];
   const all = d.list;
-  if (d.own) d.list = all.filter((MINE_GROUPS.find(g => g[0] === S.mineF) || MINE_GROUPS[0])[2]);
   const extra = d.extra || [['Updated', w => (w.updated_at || '').slice(0, 10)]];
   const hasAct = d.own || d.act;
   const actCell = w => (d.own ? `${ownActions(w)}${ownStep(w)}${S.preview ? '' : `<button class="btn sm" data-act="edit" data-id="${w.id}">Edit</button><button class="btn sm danger" data-act="del" data-id="${w.id}">Delete</button>`}` : d.act(w));
@@ -502,7 +490,6 @@ const actions = {
   nav: el => { S.nav = el.dataset.v; render(); window.scrollTo(0, 0); },
   pipe: el => { S.mf.status = S.mf.status === el.dataset.v ? '' : el.dataset.v; render(); },
   clearf: () => { S.mf = { status: '', member: '', deal: '', q: '' }; render(); },
-  minefilter: el => { S.mineF = el.dataset.v; render(); },
   mfilter: el => { S.mem.f = el.dataset.v; render(); },
   exitpreview: () => { S.preview = null; render(); },
   open: el => openDetail(el.dataset.id),
