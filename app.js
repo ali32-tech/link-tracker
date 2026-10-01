@@ -27,7 +27,7 @@ const txt = v => { v = String(v ?? '').trim(); return v === '' ? null : v; };
 const dealLabel = d => (d === 'paid' ? 'Paid' : 'Exchange');
 const pill = w => `<span class="pill ${ST[w.status].cls}">${ST[w.status].label}</span>`;
 const href = u => (/^https?:\/\//i.test(u) ? u : 'https://' + u);
-const lnk = u => (u ? `<a href="${esc(href(u))}" target="_blank" rel="noopener">${esc(u.replace(/^https?:\/\/(www\.)?/i, '').slice(0, 60))}</a>` : '—');
+const lnk = u => (u ? `<a href="${esc(href(u))}" target="_blank" rel="noopener">${/\/storage\/v1\/object\/public\/invoices\//.test(u) ? 'Invoice PDF' : esc(u.replace(/^https?:\/\/(www\.)?/i, '').slice(0, 60))}</a>` : '—');
 const ymNow = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; };
 const hist = w => w.link_history || [];
 const linkNo = w => hist(w).length + 1;
@@ -510,7 +510,7 @@ const actions = {
     const w = site(el.dataset.id);
     need(w.id, 'Mark as live',
       `<label>Live URL <span class="hint">(page where our link is live)</span></label><input name="live_url" required placeholder="https://…">` +
-      (w.deal_type === 'exchange' ? `<label>Their link <span class="hint">(the link they want from us)</span></label><input name="their_link">` : `<label>Invoice link <span class="hint">(link or PDF URL)</span></label><input name="invoice_url">`),
+      (w.deal_type === 'exchange' ? `<label>Their link <span class="hint">(the link they want from us)</span></label><input name="their_link">` : `<label>Invoice link <span class="hint">(link or PDF URL)</span></label><input name="invoice_url"><label>Or upload the invoice PDF <span class="hint">(max 10 MB)</span></label><input type="file" name="invoice_file" accept="application/pdf,.pdf">`),
       'live', 'Link is live');
   },
   approve: el => need(el.dataset.id, 'Approve', `<label>Possible links <span class="hint">(how many links this website can take)</span></label><input type="number" name="possible_links" min="1" required value="1">`, 'approve', 'Approve website'),
@@ -586,7 +586,19 @@ const forms = {
     if (error) return toast(errMsg(error), 'err');
     toast(id ? 'Saved' : S.profile.role === 'boss' ? 'Website added. It is approved.' : 'Website added. It will be reviewed.'); closeDrawer(); refreshSoon();
   },
-  live: (f, d) => upd(f.dataset.id, { status: 'live', live_url: txt(d.get('live_url')), their_link: txt(d.get('their_link')), invoice_url: txt(d.get('invoice_url')) }, 'Status: Live'),
+  async live(f, d) {
+    let invoice = txt(d.get('invoice_url'));
+    const file = d.get('invoice_file');
+    if (file && file.size) {
+      if (file.type !== 'application/pdf' && !/\.pdf$/i.test(file.name)) return toast('The invoice must be a PDF file', 'err');
+      if (file.size > 10 * 1024 * 1024) return toast('The PDF is larger than 10 MB', 'err');
+      const path = `${S.profile.id}/${crypto.randomUUID()}.pdf`;
+      const up = await sb.storage.from('invoices').upload(path, file, { contentType: 'application/pdf' });
+      if (up.error) return toast(errMsg(up.error), 'err');
+      invoice = sb.storage.from('invoices').getPublicUrl(path).data.publicUrl;
+    }
+    return upd(f.dataset.id, { status: 'live', live_url: txt(d.get('live_url')), their_link: txt(d.get('their_link')), invoice_url: invoice }, 'Status: Live');
+  },
   approve: (f, d) => upd(f.dataset.id, { status: 'approved', possible_links: num(d.get('possible_links')) }, 'Status: Approved'),
   approvelink: (f, d) => upd(f.dataset.id, { status: 'link_ready', possible_links: num(d.get('possible_links')), target_url: txt(d.get('target_url')), anchor_text: txt(d.get('anchor_text')) }, 'Status: Link Ready'),
   reject: (f, d) => {
