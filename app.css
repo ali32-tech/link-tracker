@@ -40,7 +40,7 @@ a{color:var(--accent)}
 .banner{background:var(--amber-bg);color:var(--amber-fg);padding:8px 16px;font-size:14px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
 .layout{display:flex;align-items:flex-start;max-width:1440px;margin:0 auto}
 .side{position:sticky;top:60px;width:240px;flex:none;padding:16px 8px 16px 16px;display:flex;flex-direction:column;gap:2px}
-.nav{display:flex;justify-content:space-between;align-items:center;gap:8px;text-align:left;background:none;border:0;border-radius:10px;padding:9px 12px;cursor:pointer;font-weight:600;font-size:14px;color:var(--muted)}
+.nav{display:flex;justify-content:space-between;align-items:center;gap:10px;text-align:left;background:none;border:0;border-radius:10px;padding:9px 12px;cursor:pointer;font-weight:600;font-size:14px;color:var(--muted)}
 .nav:hover{background:var(--accent-soft)}
 .nav.on{background:var(--accent-soft);color:var(--accent)}
 .nav .count{font-size:12px;min-width:22px;text-align:center;padding:1px 7px;border-radius:99px;background:var(--border);color:var(--text)}
@@ -189,3 +189,5 @@ main .toolbar + .stats{margin-top:0}
 main h2 + .sub{margin-bottom:18px}
 main .tablewrap{margin-top:4px}
 .stat{padding:16px 18px}
+
+.nav .ico{flex:none}.nav .lbl{flex:1;min-width:0}.nav{justify-content:flex-start}.nav .count{margin-left:auto}

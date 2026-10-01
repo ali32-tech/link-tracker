@@ -158,6 +158,7 @@ async function boot() {
   if (!error && !p) { await sb.rpc('claim_profile'); ({ data: p, error } = await getProfile()); }
   if (error || !p) { app.innerHTML = `<div class="center"><div class="panel"><h1>No access</h1><p>Your account has no profile yet. Ask the Manager to invite ${esc(S.session.user.email)}.</p><button class="btn" data-act="logout">Sign out</button></div></div>`; return; }
   S.profile = p;
+  if (p.role === 'boss' && !S.navInit) { S.nav = 'mine'; S.navInit = true; }
   if (!p.name) return showName();
   await loadData();
   if (S.chan) sb.removeChannel(S.chan);
@@ -369,19 +370,37 @@ function sectionView(key) {
       <td>${pill(w)}</td>${extra.map(([, fn]) => `<td>${fn(w)}</td>`).join('')}${hasAct ? `<td class="nowrap">${actCell(w)}</td>` : ''}</tr>`).join('')}</tbody></table></div>`}`;
 }
 
+const ICONS = {
+  mine: '<circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-7 8-7s8 3 8 7"/>',
+  review: '<path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/>',
+  needs: '<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>',
+  inv: '<path d="M6 2h12v20l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6"/>',
+  exch: '<path d="M4 8h14l-4-4M20 16H6l4 4"/>',
+  next: '<circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/>',
+  rejected: '<circle cx="12" cy="12" r="9"/><path d="M9 9l6 6M15 9l-6 6"/>',
+  all: '<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>',
+  commission: '<circle cx="12" cy="12" r="9"/><path d="M15 9.5c-.5-1-1.600-1.500-3-1.500-1.700 0-3 .8-3 2s1.300 1.700 3 2 3 .8 3 2-1.300 2-3 2c-1.400 0-2.500-.5-3-1.500M12 6v2M12 16v2"/>',
+  settings: '<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2"/>',
+  action: '<path d="M13 2L4 14h7l-1 8 9-12h-7z"/>',
+  live: '<path d="M5 12l5 5L20 7"/>',
+};
+const icon = k => `<svg class="ico" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[k] || ICONS.all}</svg>`;
+
 function sidebar() {
   const role = eff().role, ws = visibleSites();
-  const btn = (k, l, n, on, act = 'nav') => `<button class="nav ${on ? 'on' : ''}" data-act="${act}" data-v="${k}">${l}${n != null ? `<span class="count">${n}</span>` : ''}</button>`;
+  const btn = (k, l, n, on, act = 'nav', ic = k) => `<button class="nav ${on ? 'on' : ''}" data-act="${act}" data-v="${k}">${icon(ic)}<span class="lbl">${l}</span>${n != null ? `<span class="count">${n}</span>` : ''}</button>`;
   let items = '';
   if (role === 'boss') {
     const d = sectionDefs(ws);
-    items = btn('home', 'Review', ws.filter(w => w.status === 'boss_review').length, S.nav === 'home') + '<div class="sep"></div>' +
-      Object.keys(d).map(k => btn(k, d[k].label, d[k].list.length, S.nav === k)).join('');
+    const rows = [['mine', 'My websites', d.mine.list.length, 'mine'], ['home', 'Review', ws.filter(w => w.status === 'boss_review').length, 'review'],
+      ['needs', 'Needs a link', d.needs.list.length, 'needs'], ['inv', 'Invoices & payments', d.inv.list.length, 'inv'], ['exch', 'Exchange links', d.exch.list.length, 'exch'],
+      ['next', 'Next link possible', d.next.list.length, 'next'], ['rejected', 'Rejected', d.rejected.list.length, 'rejected'], ['all', 'All websites', d.all.list.length, 'all']];
+    items = rows.map(([k, l, n, ic]) => btn(k, l, n, S.nav === k, 'nav', ic)).join('');
   } else if (role === 'manager') {
-    items = [['home', 'Websites'], ['commission', 'Commission'], ['settings', 'Settings']].map(([k, l]) => btn(k, l, null, S.nav === k)).join('');
+    items = [['home', 'Websites', 'all'], ['commission', 'Commission', 'commission'], ['settings', 'Settings', 'settings']].map(([k, l, ic]) => btn(k, l, null, S.nav === k, 'nav', ic)).join('');
   } else {
     const cnt = { all: () => true, action: needsAction, boss: w => ['boss_review', 'approved'].includes(w.status), live: w => LIVE_STATUSES.includes(w.status), rejected: w => w.status === 'rejected' };
-    items = [['all', 'All'], ['action', 'Action needed'], ['boss', 'Under review'], ['live', 'Live'], ['rejected', 'Rejected']].map(([k, l]) => btn(k, l, ws.filter(cnt[k]).length, S.mem.f === k, 'mfilter')).join('');
+    items = [['all', 'All', 'all'], ['action', 'Action needed', 'action'], ['boss', 'Under review', 'review'], ['live', 'Live', 'live'], ['rejected', 'Rejected', 'rejected']].map(([k, l, ic]) => btn(k, l, ws.filter(cnt[k]).length, S.mem.f === k, 'mfilter', ic)).join('');
   }
   return `<nav class="side" aria-label="Sections">${items}</nav>`;
 }
