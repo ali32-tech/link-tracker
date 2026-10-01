@@ -444,6 +444,7 @@ function siteForm(w) {
     <div class="grid2"><div><label>DR</label><input type="number" min="0" max="100" name="da" value="${w.da ?? ''}"></div>
     <div><label>Traffic</label><input name="traffic" maxlength="20" placeholder="e.g. 12K, 1.5M" value="${esc(w.traffic ?? '')}"></div></div>
     <div id="pricewrap" class="${w.deal_type === 'paid' ? '' : 'hidden'}"><label>Price ($)</label><input type="number" min="0" step="0.01" name="price" value="${w.price ?? ''}"></div>
+    ${w.id && eff().role === 'boss' ? `<label>Target URL</label><input name="target_url" value="${esc(w.target_url || '')}" placeholder="https://…"><label>Anchor text</label><input name="anchor_text" value="${esc(w.anchor_text || '')}">` : ''}
     <label>Notes</label><textarea name="notes">${esc(w.notes || '')}</textarea>
     <div style="margin-top:14px"><button class="btn primary big" type="submit">${w.id ? 'Save changes' : 'Add website'}</button></div></form>`;
 }
@@ -574,6 +575,7 @@ const forms = {
   async site(f, d) {
     const paid = d.get('deal_type') === 'paid';
     const row = { url: txt(d.get('url')), contact_email: txt(d.get('contact_email')), deal_type: d.get('deal_type'), da: num(d.get('da')), traffic: txt(d.get('traffic')), price: paid ? num(d.get('price')) : null, notes: txt(d.get('notes')) };
+    if (f.dataset.id && eff().role === 'boss') { row.target_url = txt(d.get('target_url')); row.anchor_text = txt(d.get('anchor_text')); }
     if (!normDomain(row.url).includes('.')) return toast('Enter a valid website URL', 'err');
     const id = f.dataset.id;
     const { error } = id ? await sb.from('websites').update(row).eq('id', id) : await sb.from('websites').insert({ ...row, member_id: S.profile.id });
