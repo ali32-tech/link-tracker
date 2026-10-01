@@ -228,7 +228,7 @@ function openDetail(id) {
       <label>Target URL</label><input name="target_url" value="${esc(w.target_url || '')}">
       <label>Anchor text</label><input name="anchor_text" value="${esc(w.anchor_text || '')}">
       <div style="margin-top:14px"><button class="btn primary big" type="submit" ${readOnly() ? 'disabled' : ''}>Save changes</button></div></form>
-      <div class="btns" style="margin-top:14px"><button class="btn danger" data-act="del" data-id="${w.id}">Delete website</button></div>`;
+      <div class="btns" style="margin-top:14px">${ownStep(w)}${w.member_id === S.profile.id && !S.preview ? `<button class="btn" data-act="edit" data-id="${w.id}">Edit</button>` : ''}<button class="btn danger" data-act="del" data-id="${w.id}">Delete website</button></div>`;
   }
   openDrawer(w.domain, detailHtml(w) + extra, 'detail', w.id);
 }
@@ -324,8 +324,11 @@ function bossCard(w, extra, btns) {
   return `<article class="card"><div class="row"><span class="dom">${esc(w.domain)}</span>${pill(w)}</div>
     <div class="meta"><span>${dealLabel(w.deal_type)}</span>${w.deal_type === 'paid' ? `<span>${money(w.price)}</span>` : ''}<span>by ${esc(memberName(w.member_id))}</span><span>DA ${w.da ?? '—'}</span><span>Traffic ${w.traffic ?? '—'}</span>${badge}</div>
     ${extra ? `<div class="next">${extra}</div>` : ''}
-    <div class="foot" style="flex-wrap:wrap">${btns}<button class="btn sm" data-act="open" data-id="${w.id}">Details</button></div></article>`;
+    <div class="foot" style="flex-wrap:wrap">${btns}${ownStep(w)}<button class="btn sm" data-act="open" data-id="${w.id}">Details</button></div></article>`;
 }
+const ownStep = w => (w.member_id !== S.profile.id || S.preview ? '' : w.status === 'link_ready'
+  ? `<button class="btn" data-act="copymsg" data-id="${w.id}">Copy message for website</button><button class="btn primary" data-act="sentbtn" data-id="${w.id}">Link sent to website</button>`
+  : w.status === 'sent' ? `<button class="btn primary" data-act="livebtn" data-id="${w.id}">Link is live</button>` : '');
 const B = (act, id, label, primary) => `<button class="btn ${primary ? 'primary' : ''}" data-act="${act}" data-id="${id}">${label}</button>`;
 
 function sectionDefs(ws) {
@@ -380,6 +383,7 @@ function bossView() {
     <div class="stat ${d.needs.list.length ? 'hot' : ''}"><b>${d.needs.list.length}</b><span>Links to give</span></div>
     <div class="stat"><b>${d.inv.list.length} · ${money(due)}</b><span>Invoices / payments due</span></div>
     <div class="stat"><b>${d.exch.list.length}</b><span>Exchange links pending</span></div></div>
+    <div class="toolbar"><button class="btn primary" data-act="add" ${readOnly() ? 'disabled' : ''}>+ Add my website</button><span class="hint">Your own websites need no approval.</span></div>
     <h2>Review <span class="badge">${review.length}</span></h2><p class="sub">Websites waiting for your approval.</p>
     ${review.length ? `<div class="cards">${review.map(w => bossCard(w, notes(w),
       `${B('approve', w.id, 'Approve', true)}${B('approvelink', w.id, 'Approve + add link')}<button class="btn danger" data-act="reject" data-id="${w.id}">Reject</button>`)).join('')}</div>` : '<div class="empty">Nothing here right now.</div>'}`;
@@ -439,6 +443,7 @@ function siteForm(w) {
     <div class="grid2"><div><label>DA</label><input type="number" min="0" max="100" name="da" value="${w.da ?? ''}"></div>
     <div><label>Traffic</label><input name="traffic" maxlength="20" placeholder="e.g. 12K, 1.5M" value="${esc(w.traffic ?? '')}"></div></div>
     <div id="pricewrap" class="${w.deal_type === 'paid' ? '' : 'hidden'}"><label>Price ($)</label><input type="number" min="0" step="0.01" name="price" value="${w.price ?? ''}"></div>
+    ${eff().role === 'boss' ? `<label>Possible links <span class="hint">(how many links this website can take)</span></label><input type="number" min="1" name="possible_links" value="${w.possible_links ?? 1}">` : ''}
     <label>Notes</label><textarea name="notes">${esc(w.notes || '')}</textarea>
     <div style="margin-top:14px"><button class="btn primary big" type="submit">${w.id ? 'Save changes' : 'Add website'}</button></div></form>`;
 }
@@ -569,11 +574,12 @@ const forms = {
   async site(f, d) {
     const paid = d.get('deal_type') === 'paid';
     const row = { url: txt(d.get('url')), contact_email: txt(d.get('contact_email')), deal_type: d.get('deal_type'), da: num(d.get('da')), traffic: txt(d.get('traffic')), price: paid ? num(d.get('price')) : null, notes: txt(d.get('notes')) };
+    if (eff().role === 'boss') row.possible_links = Math.max(1, num(d.get('possible_links')) || 1);
     if (!normDomain(row.url).includes('.')) return toast('Enter a valid website URL', 'err');
     const id = f.dataset.id;
     const { error } = id ? await sb.from('websites').update(row).eq('id', id) : await sb.from('websites').insert({ ...row, member_id: S.profile.id });
     if (error) return toast(errMsg(error), 'err');
-    toast(id ? 'Saved' : 'Website added. It will be reviewed.'); closeDrawer(); refreshSoon();
+    toast(id ? 'Saved' : S.profile.role === 'boss' ? 'Website added. It is approved.' : 'Website added. It will be reviewed.'); closeDrawer(); refreshSoon();
   },
   live: (f, d) => upd(f.dataset.id, { status: 'live', live_url: txt(d.get('live_url')), their_link: txt(d.get('their_link')), invoice_url: txt(d.get('invoice_url')) }, 'Status: Live'),
   approve: (f, d) => upd(f.dataset.id, { status: 'approved', possible_links: num(d.get('possible_links')) }, 'Status: Approved'),

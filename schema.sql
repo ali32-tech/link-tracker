@@ -107,12 +107,18 @@ language plpgsql security definer set search_path = public as $$
 declare r text := public.auth_role();
 begin
   if tg_op = 'INSERT' then
-    if r not in ('member','manager') then raise exception 'Not allowed'; end if;
+    if r not in ('member','manager','boss') then raise exception 'Not allowed'; end if;
     new.domain := public.normalize_domain(new.url);
     if new.domain = '' then raise exception 'Invalid website URL'; end if;
-    if r = 'member' then new.member_id := auth.uid(); end if;
-    new.status := 'boss_review';
-    new.possible_links := null; new.target_url := null; new.anchor_text := null;
+    if r in ('member','boss') then new.member_id := auth.uid(); end if;
+    if r = 'boss' then
+      new.status := 'approved';
+      new.possible_links := greatest(coalesce(new.possible_links, 1), 1);
+    else
+      new.status := 'boss_review';
+      new.possible_links := null;
+    end if;
+    new.target_url := null; new.anchor_text := null;
     new.reject_reason := null; new.live_url := null; new.their_link := null;
     new.their_link_live := false; new.invoice_url := null;
     new.live_date := null; new.paid_date := null; new.link_history := '[]'::jsonb;
@@ -139,6 +145,19 @@ begin
       if new.status = 'live' and coalesce(trim(new.live_url), '') = '' then
         raise exception 'The live URL is required';
       end if;
+    end if;
+  elsif r = 'boss' and old.member_id = auth.uid() then
+    new.domain := public.normalize_domain(new.url);
+    if new.domain = '' then raise exception 'Invalid website URL'; end if;
+    if new.status in ('approved','link_ready') and coalesce(new.possible_links, 0) < 1 then
+      raise exception 'Possible links is required';
+    end if;
+    if new.status = 'link_ready'
+       and (coalesce(trim(new.target_url), '') = '' or coalesce(trim(new.anchor_text), '') = '') then
+      raise exception 'Target URL and anchor text are required';
+    end if;
+    if new.status in ('live','invoice_received','paid') and coalesce(trim(new.live_url), '') = '' then
+      raise exception 'The live URL is required';
     end if;
   elsif r = 'boss' then
     new.url := old.url; new.domain := old.domain; new.contact_email := old.contact_email;
@@ -271,7 +290,7 @@ create policy domains_read on public.domains for select to authenticated using (
 create policy websites_read on public.websites for select to authenticated
   using (public.auth_role() in ('manager','boss') or member_id = auth.uid());
 create policy websites_insert on public.websites for insert to authenticated
-  with check (public.auth_role() = 'manager' or (public.auth_role() = 'member' and member_id = auth.uid()));
+  with check (public.auth_role() = 'manager' or (public.auth_role() in ('member','boss') and member_id = auth.uid()));
 create policy websites_update on public.websites for update to authenticated
   using (public.auth_role() = 'boss' or (public.auth_role() in ('member','manager') and member_id = auth.uid()))
   with check (public.auth_role() = 'boss' or (public.auth_role() in ('member','manager') and member_id = auth.uid()));
