@@ -256,7 +256,7 @@ function managerSites() {
       ${f.status || f.member || f.deal || f.q ? '<button class="btn sm" data-act="clearf">Clear filters</button>' : ''}</div>
     <div class="btns" style="margin-bottom:12px"><button class="btn primary" data-act="add">+ Add website</button><button class="btn" data-act="whatsapp">Copy WhatsApp message</button>
       <button class="btn" data-act="import">Import</button><button class="btn" data-act="export">Export CSV</button></div>
-    ${rows.length ? `<div class="tablewrap"><table><thead><tr><th>Website</th><th>Member</th><th>Deal</th><th class="num">Price</th><th>DR / Traffic</th><th class="num">Links</th><th>Status</th><th>Updated</th></tr></thead><tbody>
+    ${rows.length ? `<div class="tablewrap"><table><thead><tr><th>Website</th><th>Name</th><th>Deal</th><th class="num">Price</th><th>DR / Traffic</th><th class="num">Links</th><th>Status</th><th>Updated</th></tr></thead><tbody>
       ${rows.map(w => `<tr data-act="open" data-id="${w.id}"><td><b>${esc(w.domain)}</b></td><td>${esc(memberName(w.member_id))}</td><td>${dealLabel(w.deal_type)}</td>
       <td class="num">${money(w.price)}</td><td>${w.da ?? '—'} / ${w.traffic ?? '—'}</td><td class="num">${w.possible_links ? `${hist(w).length + (roundDone(w) ? 1 : 0)} / ${w.possible_links}` : '—'}</td>
       <td>${pill(w)}</td><td>${(w.updated_at || '').slice(0, 10)}</td></tr>`).join('')}</tbody></table></div>`
@@ -283,7 +283,7 @@ function commissionView() {
     <div class="stat hot"><b>${money(sum('share'))}</b><span>Your total income</span></div><div class="stat"><b>${sum('live')}</b><span>Live links</span></div>
     <div class="stat"><b>${rows.filter(r => r.own).reduce((x, r) => x + r.live, 0)}</b><span>My own live links</span></div><div class="stat"><b>${money(rows.filter(r => r.own).reduce((x, r) => x + r.share, 0))}</b><span>My own income</span></div></div>
     <p class="sub" style="margin-top:12px">${label}: ${money(sum('boss'))} from client rate, ${money(sum('team'))} to team, your total income ${money(sum('share'))}. Your own sites are paid at the full client rate.</p>
-    ${rows.length ? `<div class="tablewrap"><table><thead><tr><th>Member</th><th class="num">Websites</th><th class="num">Approved+</th><th class="num">Rejected</th><th class="num">Live links</th><th class="num">Team payout</th><th class="num">Client rate</th><th class="num">My share</th></tr></thead><tbody>
+    ${rows.length ? `<div class="tablewrap"><table><thead><tr><th>Name</th><th class="num">Websites</th><th class="num">Approved+</th><th class="num">Rejected</th><th class="num">Live links</th><th class="num">Team payout</th><th class="num">Client rate</th><th class="num">My share</th></tr></thead><tbody>
       ${rows.map(r => `<tr><td><b>${esc(r.m.name || r.m.email)}</b>${r.own ? ' (you)' : ''}</td><td class="num">${r.total}</td><td class="num">${r.approved}</td><td class="num">${r.rejected}</td><td class="num">${r.live}</td><td class="num">${money(r.team)}</td><td class="num">${money(r.boss)}</td><td class="num">${money(r.share)}</td></tr>`).join('')}</tbody>
       <tfoot><tr><td>Total</td><td class="num">${sum('total')}</td><td class="num">${sum('approved')}</td><td class="num">${sum('rejected')}</td><td class="num">${sum('live')}</td><td class="num">${money(sum('team'))}</td><td class="num">${money(sum('boss'))}</td><td class="num">${money(sum('share'))}</td></tr></tfoot></table></div>`
       : '<div class="empty">No team members yet. Invite them in Settings.</div>'}`;
@@ -370,7 +370,7 @@ function sectionView(key) {
   return `<h2>${d.label} <span class="badge">${d.list.length}</span></h2>${d.sub ? `<p class="sub">${d.sub}</p>` : ''}
     ${d.add ? `<div class="toolbar"><button class="btn primary" data-act="add" ${readOnly() ? 'disabled' : ''}>+ Add website</button></div>` : ''}
     ${d.search ? `<div class="toolbar"><input type="search" id="bq" placeholder="Search website" value="${esc(S.bossQ)}" data-input="bq"></div>` : ''}
-    ${!d.list.length ? '<div class="empty">Nothing here right now.</div>' : d.table ? `<div class="tablewrap"><table><thead><tr><th>Website</th><th>Member</th><th>Deal</th><th class="num">Price</th><th>DR / Traffic</th><th class="num">Links</th><th>Status</th><th>Updated</th>${d.actions ? '<th>Action</th>' : ''}</tr></thead><tbody>
+    ${!d.list.length ? '<div class="empty">Nothing here right now.</div>' : d.table ? `<div class="tablewrap"><table><thead><tr><th>Website</th><th>Name</th><th>Deal</th><th class="num">Price</th><th>DR / Traffic</th><th class="num">Links</th><th>Status</th><th>Updated</th>${d.actions ? '<th>Action</th>' : ''}</tr></thead><tbody>
       ${d.list.map(w => `<tr data-act="open" data-id="${w.id}"><td><b>${esc(w.domain)}</b></td><td>${esc(memberName(w.member_id))}</td><td>${dealLabel(w.deal_type)}</td>
       <td class="num">${money(w.price)}</td><td>${w.da ?? '—'} / ${w.traffic ?? '—'}</td><td class="num">${w.possible_links ? `${hist(w).length + (roundDone(w) ? 1 : 0)} / ${w.possible_links}` : '—'}</td>
       <td>${pill(w)}</td><td>${(w.updated_at || '').slice(0, 10)}</td>${d.actions ? `<td class="nowrap">${ownActions(w)}${ownStep(w)}${S.preview ? '' : `<button class="btn sm" data-act="edit" data-id="${w.id}">Edit</button><button class="btn sm danger" data-act="del" data-id="${w.id}">Delete</button>`}</td>` : ''}</tr>`).join('')}</tbody></table></div>` : `<div class="cards">${d.list.map(d.fn).join('')}</div>`}`;
@@ -396,8 +396,8 @@ function sidebar() {
 function bossView() {
   const review = visibleSites().filter(w => w.status === 'boss_review');
   return `<h2>Review <span class="badge">${review.length}</span></h2><p class="sub">Websites waiting for your approval.</p>
-    ${review.length ? `<div class="tablewrap"><table><thead><tr><th>Website</th><th>Deal</th><th class="num">Price</th><th>DR / Traffic</th><th>Action</th></tr></thead><tbody>
-      ${review.map(w => `<tr data-act="open" data-id="${w.id}"><td><b>${esc(w.domain)}</b></td><td>${dealLabel(w.deal_type)}</td>
+    ${review.length ? `<div class="tablewrap"><table><thead><tr><th>Website</th><th>Name</th><th>Deal</th><th class="num">Price</th><th>DR / Traffic</th><th>Action</th></tr></thead><tbody>
+      ${review.map(w => `<tr data-act="open" data-id="${w.id}"><td><b>${esc(w.domain)}</b></td><td>${esc(memberName(w.member_id))}</td><td>${dealLabel(w.deal_type)}</td>
       <td class="num">${money(w.price)}</td><td>${w.da ?? '—'} / ${w.traffic ?? '—'}</td>
       <td class="nowrap">${B('approve', w.id, 'Approve', true)}${B('approvelink', w.id, 'Approve + add link')}<button class="btn danger" data-act="reject" data-id="${w.id}">Reject</button></td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">Nothing here right now.</div>'}`;
 }
