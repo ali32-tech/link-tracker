@@ -176,3 +176,5 @@ dl.kv dd{margin:0;word-break:break-word}
 .switch{text-align:center;color:var(--muted);font-size:14px;margin:20px 0 0}
 .notice{background:var(--green-bg);color:var(--green-fg);border-radius:10px;padding:10px 12px;font-size:14px;margin-bottom:16px;text-align:left}
 .notice.err{background:var(--red-bg);color:var(--red-fg)}
+
+td.nowrap{white-space:nowrap}td.nowrap .btn{margin-right:6px}
