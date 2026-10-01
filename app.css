@@ -197,17 +197,19 @@ main .tablewrap{margin-top:4px}
 
 /* sidebar: one theme color, red only for rejected/trash */
 .nav{--c:var(--accent)}
-.nav .ico{color:var(--muted)}
+.nav .ico{color:var(--ic,var(--muted))}
 .nav:hover{background:var(--accent-soft)}
 .nav.on{background:var(--accent-soft);color:var(--accent)}
-.nav.on .ico{color:var(--accent)}
 .nav.on .count{background:var(--accent);color:#fff}
 .nav:not(.on) .count{background:var(--border);color:var(--text)}
-.nav.c-rejected .ico,.nav.c-trash .ico{color:color-mix(in srgb,#EF4444 70%,var(--muted))}
 .nav.c-rejected:hover,.nav.c-trash:hover,.nav.c-rejected.on,.nav.c-trash.on{background:color-mix(in srgb,#EF4444 12%,transparent);color:#EF4444}
-.nav.c-rejected.on .ico,.nav.c-trash.on .ico{color:#EF4444}
 .nav.c-rejected.on .count,.nav.c-trash.on .count{background:#EF4444}
 
 /* stat numbers: theme green and blue, amber only for money still due */
 .stat[class*=tint-] b{color:var(--t)}
 .tint-blue{--t:var(--text)}.tint-green{--t:#10B981}.tint-amber{--t:#D97706}.tint-purple{--t:#3B82F6}
+
+/* icon colors only */
+.c-mine{--ic:#3B82F6}.c-review{--ic:#F59E0B}.c-needs{--ic:#8B5CF6}.c-inv{--ic:#10B981}.c-exch{--ic:#06B6D4}
+.c-next{--ic:#6366F1}.c-rejected{--ic:#EF4444}.c-all{--ic:#64748B}.c-trash{--ic:#F43F5E}
+.c-commission{--ic:#10B981}.c-settings{--ic:#64748B}.c-action{--ic:#F59E0B}.c-live{--ic:#10B981}

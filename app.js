@@ -136,7 +136,7 @@ function showLogin(message, kind) {
       <p class="switch"><a href="#" data-act="mode" data-v="in">Back to sign in</a></p>`,
   }[m];
   app.innerHTML = `<div class="auth"><div class="auth-card"><img class="auth-logo" src="flipbite-logo.png" alt="FlipBite">
-    <div class="auth-brand">FlipBite <b>Link Tracker</b></div>
+    <div class="auth-brand">FlipBite</div>
     <h1>${titles[m][0]}</h1><p class="lead">${titles[m][1]}</p>
     ${message ? `<div class="notice ${kind === 'err' ? 'err' : ''}">${esc(message)}</div>` : ''}${form}</div></div>`;
 }
@@ -175,7 +175,7 @@ function header() {
     const opt = r => S.people.filter(p => p.role === r).map(p => `<option value="${p.id}" ${S.preview && S.preview.id === p.id ? 'selected' : ''}>${esc(p.name || p.email)}</option>`).join('');
     previewSel = `<select data-change="preview" style="width:auto" aria-label="Preview as"><option value="">Preview as…</option>${opt('boss')}${opt('member')}</select>`;
   }
-  return `<div class="top"><a class="brand" href="./" style="text-decoration:none"><img src="flipbite-logo.png" alt="FlipBite">FlipBite <b>Link Tracker</b></a>
+  return `<div class="top"><a class="brand" href="./" style="text-decoration:none"><img src="flipbite-logo.png" alt="FlipBite">FlipBite</a>
     ${previewSel}${S.preview ? `<span class="tag">${esc(e.name)}</span>` : `<input class="myname" data-change="myname" value="${esc(e.name)}" maxlength="60" aria-label="Your name (click to edit)" title="Click to edit your name">`}
     <button class="btn sm" data-act="logout">Sign out</button></div>
     ${S.preview ? `<div class="banner">Previewing as <b>${esc(S.preview.name || S.preview.email)}</b> Read-only.
