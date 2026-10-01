@@ -177,7 +177,6 @@ function header() {
   }
   return `<div class="top"><a class="brand" href="./" style="text-decoration:none"><img src="flipbite-logo.png" alt="FlipBite">FlipBite <b>Link Tracker</b></a>
     ${previewSel}${S.preview ? `<span class="tag">${esc(e.name)}</span>` : `<input class="myname" data-change="myname" value="${esc(e.name)}" maxlength="60" aria-label="Your name (click to edit)" title="Click to edit your name">`}
-    <button class="btn sm" data-act="theme" aria-label="Toggle dark mode">Theme</button>
     <button class="btn sm" data-act="logout">Sign out</button></div>
     ${S.preview ? `<div class="banner">Previewing as <b>${esc(S.preview.name || S.preview.email)}</b> Read-only.
       <button class="btn sm" data-act="exitpreview">Exit preview</button></div>` : ''}`;
@@ -503,12 +502,6 @@ const actions = {
   mode: el => { S.mode = el.dataset.v; showLogin(); },
   showpw: el => { const i = el.previousElementSibling; i.type = i.type === 'password' ? 'text' : 'password'; el.textContent = i.type === 'password' ? 'Show' : 'Hide'; },
   logout: async () => { if (S.chan) sb.removeChannel(S.chan); await sb.auth.signOut(); },
-  theme: () => {
-    const cur = document.documentElement.dataset.theme || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
-    const nx = cur === 'dark' ? 'light' : 'dark';
-    document.documentElement.dataset.theme = nx;
-    try { localStorage.setItem('lt-theme', nx); } catch (e) {}
-  },
   close: closeDrawer,
   nav: el => { S.nav = el.dataset.v; render(); window.scrollTo(0, 0); },
   pipe: el => { S.mf.status = S.mf.status === el.dataset.v ? '' : el.dataset.v; render(); },
