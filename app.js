@@ -41,7 +41,7 @@ const errMsg = e => (e && e.code === '23505' ? 'This website is already in the t
 
 const S = {
   session: null, profile: null, sites: [], people: [], invites: [], teamRate: 7, bossRate: 10,
-  tab: 'websites', mf: { status: '', member: '', deal: '', q: '' }, mem: { f: 'all', q: '' }, bossQ: '',
+  nav: 'home', mf: { status: '', member: '', deal: '', q: '' }, mem: { f: 'all', q: '' }, bossQ: '',
   month: ymNow(), preview: null, drawer: null, chan: null,
 };
 let sb = null, armed = null, refreshTimer = null;
@@ -235,9 +235,7 @@ function openDetail(id) {
 
 // ---------- Manager ----------
 function managerView() {
-  const tabs = [['websites', 'Websites'], ['commission', 'Commission'], ['settings', 'Settings']];
-  return `<div class="tabs">${tabs.map(([k, l]) => `<button class="tab ${S.tab === k ? 'on' : ''}" data-act="tab" data-v="${k}">${l}</button>`).join('')}</div>` +
-    (S.tab === 'commission' ? commissionView() : S.tab === 'settings' ? settingsView() : managerSites());
+  return S.nav === 'commission' ? commissionView() : S.nav === 'settings' ? settingsView() : managerSites();
 }
 
 function managerSites() {
@@ -330,34 +328,53 @@ function bossCard(w, extra, btns) {
 }
 const B = (act, id, label, primary) => `<button class="btn ${primary ? 'primary' : ''}" data-act="${act}" data-id="${id}">${label}</button>`;
 
+function sectionDefs(ws) {
+  const boss = eff().role === 'boss';
+  const act = html => (boss ? html : '');
+  const notes = w => (w.notes ? `<div><span class="k">Notes</span><br>${esc(w.notes)}</div>` : '') + (w.contact_email ? `<div><span class="k">Contact</span><br>${esc(w.contact_email)}</div>` : '');
+  return {
+    needs: { label: 'Needs a link (Approved)', sub: 'Approved websites that are waiting for a target URL and anchor.', list: ws.filter(w => w.status === 'approved'),
+      fn: w => bossCard(w, `Possible links: <b>${w.possible_links ?? '?'}</b>`, act(B('addlink', w.id, 'Add link', true))) },
+    inv: { label: 'Invoices and payments', sub: 'Paid deals that are live.', list: ws.filter(w => w.deal_type === 'paid' && ['live', 'invoice_received'].includes(w.status)),
+      fn: w => bossCard(w, `<div><span class="k">Our live link</span><br>${lnk(w.live_url)}</div><div><span class="k">Invoice</span><br>${w.invoice_url ? lnk(w.invoice_url) : 'No invoice link yet'}</div><div><span class="k">Amount</span><br>${money(w.price)}</div>`,
+        act(w.status === 'live' ? B('invoice', w.id, 'Invoice received', true) : B('paid', w.id, 'Mark as paid', true))) },
+    exch: { label: 'Exchange links to place', sub: 'Exchange deals that are live. Place their link somewhere.', list: ws.filter(w => w.deal_type === 'exchange' && w.status === 'live' && !w.their_link_live),
+      fn: w => bossCard(w, `<div><span class="k">Our live link</span><br>${lnk(w.live_url)}</div><div><span class="k">Their link</span><br>${lnk(w.their_link)}</div>`, act(B('theirlive', w.id, 'Their link is live', true))) },
+    next: { label: 'Next link possible on the same website', sub: 'Finished websites that can take more links.', list: ws.filter(nextPossible),
+      fn: w => bossCard(w, `Links placed: <b>${linkNo(w)}</b> of ${w.possible_links}`, act(B('nextlink', w.id, 'Add next link', true))) },
+    all: { label: 'All websites', sub: '', list: ws.filter(w => !S.bossQ.trim() || w.domain.includes(S.bossQ.trim().toLowerCase())), fn: w => bossCard(w, '', ''), search: true },
+  };
+}
+
+function sectionView(key) {
+  const d = sectionDefs(visibleSites())[key];
+  return `<h2>${d.label} <span class="badge">${d.list.length}</span></h2>${d.sub ? `<p class="sub">${d.sub}</p>` : ''}
+    ${d.search ? `<div class="toolbar"><input type="search" id="bq" placeholder="Search website" value="${esc(S.bossQ)}" data-input="bq"></div>` : ''}
+    ${d.list.length ? `<div class="cards">${d.list.map(d.fn).join('')}</div>` : '<div class="empty">Nothing here right now.</div>'}`;
+}
+
+function sidebar() {
+  const role = eff().role, ws = visibleSites(), d = sectionDefs(ws);
+  const home = { boss: 'Review', manager: 'Websites', member: 'My websites' }[role];
+  const items = [['home', home, role === 'boss' ? ws.filter(w => w.status === 'boss_review').length : null]];
+  if (role === 'manager') items.push(['commission', 'Commission', null], ['settings', 'Settings', null]);
+  const btn = ([k, l, n]) => `<button class="nav ${S.nav === k ? 'on' : ''}" data-act="nav" data-v="${k}">${l}${n != null ? `<span class="count">${n}</span>` : ''}</button>`;
+  return `<nav class="side" aria-label="Sections">${items.map(btn).join('')}<div class="sep"></div>${Object.keys(d).map(k => btn([k, d[k].label, d[k].list.length])).join('')}</nav>`;
+}
+
 function bossView() {
   const ws = visibleSites();
+  const d = sectionDefs(ws);
   const review = ws.filter(w => w.status === 'boss_review');
-  const needs = ws.filter(w => w.status === 'approved');
-  const inv = ws.filter(w => w.deal_type === 'paid' && ['live', 'invoice_received'].includes(w.status));
-  const exch = ws.filter(w => w.deal_type === 'exchange' && w.status === 'live' && !w.their_link_live);
-  const next = ws.filter(nextPossible);
-  const due = inv.reduce((a, w) => a + (+w.price || 0), 0);
-  const q = S.bossQ.trim().toLowerCase();
-  const all = ws.filter(w => !q || w.domain.includes(q));
-  const sec = (title, sub, list, fn) => `<h2>${title} <span class="badge">${list.length}</span></h2><p class="sub">${sub}</p>` +
-    (list.length ? `<div class="cards">${list.map(fn).join('')}</div>` : '<div class="empty">Nothing here right now.</div>');
+  const due = d.inv.list.reduce((a, w) => a + (+w.price || 0), 0);
   const notes = w => (w.notes ? `<div><span class="k">Notes</span><br>${esc(w.notes)}</div>` : '') + (w.contact_email ? `<div><span class="k">Contact</span><br>${esc(w.contact_email)}</div>` : '');
   return `<div class="stats"><div class="stat ${review.length ? 'hot' : ''}"><b>${review.length}</b><span>Reviews pending</span></div>
-    <div class="stat ${needs.length ? 'hot' : ''}"><b>${needs.length}</b><span>Links to give</span></div>
-    <div class="stat"><b>${inv.length} · ${money(due)}</b><span>Invoices / payments due</span></div>
-    <div class="stat"><b>${exch.length}</b><span>Exchange links pending</span></div></div>
-    ${sec('Review', 'Websites waiting for your approval.', review, w => bossCard(w, notes(w),
-      `${B('approve', w.id, 'Approve', true)}${B('approvelink', w.id, 'Approve + add link')}<button class="btn danger" data-act="reject" data-id="${w.id}">Reject</button>`))}
-    ${sec('Needs a link (Approved)', 'Approved websites that are waiting for a target URL and anchor.', needs, w => bossCard(w, `Possible links: <b>${w.possible_links}</b>`, B('addlink', w.id, 'Add link', true)))}
-    ${sec('Invoices and payments', 'Paid deals that are live.', inv, w => bossCard(w,
-      `<div><span class="k">Our live link</span><br>${lnk(w.live_url)}</div><div><span class="k">Invoice</span><br>${w.invoice_url ? lnk(w.invoice_url) : 'No invoice link yet'}</div><div><span class="k">Amount</span><br>${money(w.price)}</div>`,
-      w.status === 'live' ? B('invoice', w.id, 'Invoice received', true) : B('paid', w.id, 'Mark as paid', true)))}
-    ${sec('Exchange links to place', 'Exchange deals that are live. Place their link somewhere.', exch, w => bossCard(w,
-      `<div><span class="k">Our live link</span><br>${lnk(w.live_url)}</div><div><span class="k">Their link</span><br>${lnk(w.their_link)}</div>`, B('theirlive', w.id, 'Their link is live', true)))}
-    ${sec('Next link possible on the same website', 'Finished websites that can take more links.', next, w => bossCard(w, `Links placed: <b>${linkNo(w)}</b> of ${w.possible_links}`, B('nextlink', w.id, 'Add next link', true)))}
-    <h2>All websites</h2><div class="toolbar"><input type="search" id="bq" placeholder="Search website" value="${esc(S.bossQ)}" data-input="bq"></div>
-    ${all.length ? `<div class="cards">${all.map(w => bossCard(w, '', '')).join('')}</div>` : '<div class="empty">No websites found.</div>'}`;
+    <div class="stat ${d.needs.list.length ? 'hot' : ''}"><b>${d.needs.list.length}</b><span>Links to give</span></div>
+    <div class="stat"><b>${d.inv.list.length} · ${money(due)}</b><span>Invoices / payments due</span></div>
+    <div class="stat"><b>${d.exch.list.length}</b><span>Exchange links pending</span></div></div>
+    <h2>Review <span class="badge">${review.length}</span></h2><p class="sub">Websites waiting for your approval.</p>
+    ${review.length ? `<div class="cards">${review.map(w => bossCard(w, notes(w),
+      `${B('approve', w.id, 'Approve', true)}${B('approvelink', w.id, 'Approve + add link')}<button class="btn danger" data-act="reject" data-id="${w.id}">Reject</button>`)).join('')}</div>` : '<div class="empty">Nothing here right now.</div>'}`;
 }
 
 // ---------- Member ----------
@@ -430,7 +447,9 @@ function render() {
   if (!S.profile) return;
   const a = document.activeElement, focus = a && a.id ? { id: a.id, s: a.selectionStart, e: a.selectionEnd } : null;
   const role = eff().role;
-  app.innerHTML = header() + '<main>' + (role === 'manager' ? managerView() : role === 'boss' ? bossView() : memberView()) + '</main>';
+  if (['commission', 'settings'].includes(S.nav) && role !== 'manager') S.nav = 'home';
+  const body = S.nav !== 'home' && sectionDefs(visibleSites())[S.nav] ? sectionView(S.nav) : role === 'manager' ? managerView() : role === 'boss' ? bossView() : memberView();
+  app.innerHTML = header() + `<div class="layout">${sidebar()}<main>${body}</main></div>`;
   if (focus) { const n = document.getElementById(focus.id); if (n) { n.focus(); try { n.setSelectionRange(focus.s, focus.e); } catch (e) {} } }
 }
 
@@ -451,7 +470,7 @@ const actions = {
     try { localStorage.setItem('lt-theme', nx); } catch (e) {}
   },
   close: closeDrawer,
-  tab: el => { S.tab = el.dataset.v; render(); },
+  nav: el => { S.nav = el.dataset.v; render(); window.scrollTo(0, 0); },
   pipe: el => { S.mf.status = S.mf.status === el.dataset.v ? '' : el.dataset.v; render(); },
   clearf: () => { S.mf = { status: '', member: '', deal: '', q: '' }; render(); },
   mfilter: el => { S.mem.f = el.dataset.v; render(); },
