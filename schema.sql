@@ -312,12 +312,14 @@ create policy invites_manager on public.invites for all to authenticated
   using (public.auth_role() = 'manager') with check (public.auth_role() = 'manager');
 
 create policy settings_read on public.settings for select to authenticated
-  using (public.auth_role() in ('manager','member'));
+  using (public.auth_role() in ('manager','member','boss'));
 create policy settings_write on public.settings for update to authenticated
   using (public.auth_role() = 'manager') with check (public.auth_role() = 'manager');
 
 create policy private_settings_manager on public.private_settings for all to authenticated
   using (public.auth_role() = 'manager') with check (public.auth_role() = 'manager');
+create policy private_settings_boss_read on public.private_settings for select to authenticated
+  using (public.auth_role() = 'boss');
 
 create policy domains_read on public.domains for select to authenticated using (true);
 

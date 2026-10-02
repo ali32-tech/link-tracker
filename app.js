@@ -77,8 +77,9 @@ const memberName = id => {
 async function loadData() {
   const role = S.profile.role;
   const jobs = [sb.from('websites').select('*').order('updated_at', { ascending: false })];
-  if (role !== 'boss') jobs.push(sb.from('settings').select('team_rate').maybeSingle());
+  jobs.push(sb.from('settings').select('team_rate').maybeSingle());
   if (role !== 'member') jobs.push(sb.from('profiles').select('id,name,email,role'));
+  if (role === 'boss') jobs.push(sb.from('private_settings').select('boss_rate').maybeSingle());
   if (role === 'manager') {
     jobs.push(sb.from('private_settings').select('boss_rate').maybeSingle());
     jobs.push(sb.from('invites').select('*').order('created_at', { ascending: false }));
@@ -88,8 +89,9 @@ async function loadData() {
   if (w.error) return toast(errMsg(w.error), 'err');
   S.sites = w.data.filter(x => !x.deleted_at);
   S.trash = S.profile.role === 'boss' ? w.data.filter(x => x.deleted_at) : [];
-  if (role !== 'boss') { const s = res.shift(); if (s.data) S.teamRate = +s.data.team_rate; }
+  { const s = res.shift(); if (s.data) S.teamRate = +s.data.team_rate; }
   if (role !== 'member') S.people = res.shift().data || [];
+  if (role === 'boss') { const b = res.shift(); if (b.data) S.bossRate = +b.data.boss_rate; }
   if (role === 'manager') {
     const b = res.shift(); if (b.data) S.bossRate = +b.data.boss_rate;
     S.invites = res.shift().data || [];
@@ -378,11 +380,24 @@ function sectionDefs(allWs) {
       act: w => act(`<button class="btn" data-act="restore" data-id="${w.id}">Restore</button><button class="btn sm danger" data-act="purge" data-id="${w.id}">Delete forever</button>`) },
     all: { label: 'All websites', sub: '', list: ws.filter(w => !S.bossQ.trim() || w.domain.includes(S.bossQ.trim().toLowerCase())), search: true,
       act: w => act(S.preview ? '' : `<button class="btn sm danger" data-act="del" data-id="${w.id}">Delete</button>`) },
-    team: { label: 'Team managing', sub: 'Your team members and how their websites are doing.', list: S.people.filter(p => p.role === 'member'),
-      cols: [['Name', r => `<b>${esc(r.w.name || '—')}</b>`], ['Email', r => esc(r.w.email)],
-        ['Websites', r => allWs.filter(x => x.member_id === r.w.id).length], ['Under review', r => allWs.filter(x => x.member_id === r.w.id && x.status === 'boss_review').length],
-        ['Live links', r => allWs.filter(x => x.member_id === r.w.id).reduce((n, x) => n + hist(x).length + (LIVE_STATUSES.includes(x.status) ? 1 : 0), 0)],
-        ['Rejected', r => allWs.filter(x => x.member_id === r.w.id && x.status === 'rejected').length]], wrap: true },
+    team: (() => {
+      const ym = S.month;
+      const people = S.people.filter(p => ['member', 'manager'].includes(p.role));
+      const perf = p => {
+        const sites = allWs.filter(x => x.member_id === p.id);
+        const live = sites.reduce((n, x) => n + liveCount(x, ym), 0);
+        const rate = p.role === 'manager' ? S.bossRate : S.teamRate;
+        return { sites, live, rate, pay: live * rate, total: sites.reduce((n, x) => n + hist(x).length + (LIVE_STATUSES.includes(x.status) ? 1 : 0), 0),
+          review: sites.filter(x => x.status === 'boss_review').length, rejected: sites.filter(x => x.status === 'rejected').length };
+      };
+      const all = people.map(perf);
+      const sum = k => all.reduce((n, r) => n + r[k], 0);
+      return { label: 'Team managing', sub: 'How each person is doing, and what each person earns for the live links of the selected month.', list: people, wrap: true,
+        toolbar: `<div class="toolbar"><label style="margin:0">Month</label><input type="month" style="width:auto" value="${ym}" data-change="month"></div>`,
+        cols: [['Name', r => `<b>${esc(r.w.name || r.w.email)}</b>`], ['Websites', r => perf(r.w).sites.length], ['Under review', r => perf(r.w).review], ['Rejected', r => perf(r.w).rejected],
+          ['Live links (all)', r => perf(r.w).total], ['Live this month', r => perf(r.w).live], ['Rate / link', r => money(perf(r.w).rate)], ['To pay', r => `<b>${money(perf(r.w).pay)}</b>`]],
+        foot: ['Total', all.reduce((n, r) => n + r.sites.length, 0), sum('review'), sum('rejected'), sum('total'), sum('live'), '', `<b>${money(sum('pay'))}</b>`] };
+    })(),
   };
 }
 
@@ -414,8 +429,9 @@ function sectionView(key) {
   if (d.cols) {
     const rows = d.wrap ? d.list.map(w => ({ w, x: w, cur: true })) : d.list;
     return `<h2>${d.label} <span class="badge">${rows.length}</span></h2><p class="sub">${d.sub}</p>
+      ${d.toolbar || ''}
       ${rows.length ? `<div class="tablewrap"><table><thead><tr>${d.cols.map(([l]) => `<th>${l}</th>`).join('')}${d.rowAct ? '<th>Action</th>' : ''}</tr></thead><tbody>
-      ${rows.map(r => `<tr ${d.kind ? `data-act="linkdetail" data-id="${r.w.id}" data-i="${r.i ?? -1}" data-k="${d.kind}"` : ''}>${d.cols.map(([, fn]) => `<td>${fn(r)}</td>`).join('')}${d.rowAct ? `<td class="nowrap">${d.rowAct(r)}</td>` : ''}</tr>`).join('')}</tbody></table></div>` : '<div class="empty">Nothing here right now.</div>'}`;
+      ${rows.map(r => `<tr ${d.kind ? `data-act="linkdetail" data-id="${r.w.id}" data-i="${r.i ?? -1}" data-k="${d.kind}"` : ''}>${d.cols.map(([, fn]) => `<td>${fn(r)}</td>`).join('')}${d.rowAct ? `<td class="nowrap">${d.rowAct(r)}</td>` : ''}</tr>`).join('')}</tbody>${d.foot ? `<tfoot><tr>${d.foot.map(c => `<td>${c}</td>`).join('')}</tr></tfoot>` : ''}</table></div>` : '<div class="empty">Nothing here right now.</div>'}`;
   }
   const extra = d.extra || [['Updated', w => (w.updated_at || '').slice(0, 10)]];
   const hasAct = d.own || d.act;
