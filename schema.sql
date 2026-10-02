@@ -11,6 +11,7 @@ create table public.profiles (
   name text,
   email text not null,
   role text not null check (role in ('manager','boss','member')),
+  rate numeric,
   created_at timestamptz not null default now()
 );
 
@@ -247,6 +248,15 @@ begin
   if p_role not in ('member','boss') then raise exception 'Invalid role'; end if;
   update public.profiles set role = p_role where id = p_id and role <> 'manager';
 end $$;
+
+create or replace function public.set_person_rate(p_id uuid, p_rate numeric) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  if public.auth_role() not in ('manager','boss') then raise exception 'Not allowed'; end if;
+  if p_rate is not null and p_rate < 0 then raise exception 'Invalid rate'; end if;
+  update public.profiles set rate = p_rate where id = p_id and role in ('member','manager');
+end $$;
+grant execute on function public.set_person_rate(uuid, numeric) to authenticated;
 
 create or replace function public.add_next_link(p_id uuid, p_target text, p_anchor text, p_price numeric)
 returns void language plpgsql security definer set search_path = public as $$

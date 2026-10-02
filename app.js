@@ -34,6 +34,7 @@ const linkNo = w => hist(w).length + 1;
 const roundDone = w => (w.deal_type === 'paid' && w.status === 'paid') || (w.deal_type === 'exchange' && w.status === 'live' && w.their_link_live);
 const ownBoss = w => !!S.profile && S.profile.role === 'boss' && w.member_id === S.profile.id;
 const nextPossible = w => roundDone(w) && (ownBoss(w) || linkNo(w) < (w.possible_links || 0));
+const rateOf = p => (p.rate != null && p.rate !== '' ? +p.rate : p.role === 'manager' ? S.bossRate : S.teamRate);
 const liveCount = (w, ym) =>
   (LIVE_STATUSES.includes(w.status) && (w.live_date || '').startsWith(ym) ? 1 : 0) +
   hist(w).filter(h => (h.live_date || '').startsWith(ym)).length;
@@ -78,7 +79,7 @@ async function loadData() {
   const role = S.profile.role;
   const jobs = [sb.from('websites').select('*').order('updated_at', { ascending: false })];
   jobs.push(sb.from('settings').select('team_rate').maybeSingle());
-  if (role !== 'member') jobs.push(sb.from('profiles').select('id,name,email,role'));
+  if (role !== 'member') jobs.push(sb.from('profiles').select('id,name,email,role,rate'));
   if (role === 'boss') jobs.push(sb.from('private_settings').select('boss_rate').maybeSingle());
   if (role === 'manager') {
     jobs.push(sb.from('private_settings').select('boss_rate').maybeSingle());
@@ -90,7 +91,11 @@ async function loadData() {
   S.sites = w.data.filter(x => !x.deleted_at);
   S.trash = S.profile.role === 'boss' ? w.data.filter(x => x.deleted_at) : [];
   { const s = res.shift(); if (s.data) S.teamRate = +s.data.team_rate; }
-  if (role !== 'member') S.people = res.shift().data || [];
+  if (role !== 'member') {
+    let p = res.shift();
+    if (p.error) p = await sb.from('profiles').select('id,name,email,role');
+    S.people = p.data || [];
+  }
   if (role === 'boss') { const b = res.shift(); if (b.data) S.bossRate = +b.data.boss_rate; }
   if (role === 'manager') {
     const b = res.shift(); if (b.data) S.bossRate = +b.data.boss_rate;
@@ -268,7 +273,7 @@ function commissionView() {
     return {
       m, total: ws.length, approved: ws.filter(w => !['boss_review', 'rejected'].includes(w.status)).length,
       rejected: ws.filter(w => w.status === 'rejected').length, live,
-      own, team: own ? 0 : live * S.teamRate, boss: live * S.bossRate, share: own ? live * S.bossRate : live * (S.bossRate - S.teamRate),
+      own, team: own ? 0 : live * rateOf(m), boss: own ? live * rateOf(m) : live * S.bossRate, share: own ? live * rateOf(m) : live * (S.bossRate - rateOf(m)),
     };
   });
   const sum = k => rows.reduce((a, r) => a + r[k], 0);
@@ -386,7 +391,7 @@ function sectionDefs(allWs) {
       const perf = p => {
         const sites = allWs.filter(x => x.member_id === p.id);
         const live = sites.reduce((n, x) => n + liveCount(x, ym), 0);
-        const rate = p.role === 'manager' ? S.bossRate : S.teamRate;
+        const rate = rateOf(p);
         return { sites, live, rate, pay: live * rate, total: sites.reduce((n, x) => n + hist(x).length + (LIVE_STATUSES.includes(x.status) ? 1 : 0), 0),
           review: sites.filter(x => x.status === 'boss_review').length, rejected: sites.filter(x => x.status === 'rejected').length };
       };
@@ -395,7 +400,7 @@ function sectionDefs(allWs) {
       return { label: 'Team managing', sub: 'How each person is doing, and what each person earns for the live links of the selected month.', list: people, wrap: true,
         toolbar: `<div class="toolbar"><label style="margin:0">Month</label><input type="month" style="width:auto" value="${ym}" data-change="month"></div>`,
         cols: [['Name', r => `<b>${esc(r.w.name || r.w.email)}</b>`], ['Websites', r => perf(r.w).sites.length], ['Under review', r => perf(r.w).review], ['Rejected', r => perf(r.w).rejected],
-          ['Live links (all)', r => perf(r.w).total], ['Live this month', r => perf(r.w).live], ['Rate / link', r => money(perf(r.w).rate)], ['To pay', r => `<b>${money(perf(r.w).pay)}</b>`]],
+          ['Live links (all)', r => perf(r.w).total], ['Live this month', r => perf(r.w).live], ['Rate / link', r => `<input type="number" class="rate" step="0.01" min="0" value="${perf(r.w).rate}" data-change="personrate" data-id="${r.w.id}" ${S.preview ? 'disabled' : ''} aria-label="Rate per link">`], ['To pay', r => `<b>${money(perf(r.w).pay)}</b>`]],
         foot: ['Total', all.reduce((n, r) => n + r.sites.length, 0), sum('review'), sum('rejected'), sum('total'), sum('live'), '', `<b>${money(sum('pay'))}</b>`] };
     })(),
   };
@@ -512,7 +517,7 @@ function memberView() {
   const list = ws.filter(w => filt(w) && (!q || w.domain.includes(q)));
   return `<div class="stats"><div class="stat"><b>${ws.length}</b><span>My websites</span></div>
     <div class="stat ${ws.filter(needsAction).length ? 'hot' : ''}"><b>${ws.filter(needsAction).length}</b><span>Action needed</span></div>
-    <div class="stat"><b>${live}</b><span>Live this month</span></div><div class="stat"><b>${money(live * S.teamRate)}</b><span>My earnings this month</span></div></div>
+    <div class="stat"><b>${live}</b><span>Live this month</span></div><div class="stat"><b>${money(live * (S.profile.rate != null ? +S.profile.rate : S.teamRate))}</b><span>My earnings this month</span></div></div>
     <div class="toolbar"><button class="btn primary" data-act="add" ${readOnly() ? 'disabled' : ''}>+ Add website</button>
       <input type="search" id="memq" placeholder="Search" value="${esc(S.mem.q)}" data-input="memq"></div>
     ${list.length ? `<div class="tablewrap"><table><thead><tr><th>Website</th><th>Deal</th><th class="num">Price</th><th>DR / Traffic</th><th>Status</th><th>Target URL</th><th>Anchor text</th><th>Note</th><th>Action</th></tr></thead><tbody>${list.map(memberRow).join('')}</tbody></table></div>` :
@@ -868,6 +873,13 @@ const forms = {
 };
 
 const changes = {
+  async personrate(t) {
+    const v = num(t.value);
+    if (v == null || v < 0) { toast('Enter a valid rate', 'err'); return render(); }
+    const { error } = await sb.rpc('set_person_rate', { p_id: t.dataset.id, p_rate: v });
+    if (error) { toast(errMsg(error), 'err'); return render(); }
+    toast('Rate saved'); await loadData(); render();
+  },
   csvfile(t) {
     const file = t.files[0];
     if (!file) return;
