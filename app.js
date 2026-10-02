@@ -342,15 +342,15 @@ function sectionDefs(allWs) {
   return {
     mine: { label: 'My websites', sub: 'Websites you add yourself. They need no approval and nobody else can see them.', list: mineList, add: true, own: true },
     mylinks: { label: 'Website links', sub: 'Links you have sent to your own websites.', list: linkRows(() => true),
-      cols: [['Website', siteCell], ['Link sent', r => lnk(r.x.target_url)], ['Anchor text', r => esc(r.x.anchor_text || '—')], ['DR / Traffic', drCell]], kind: 'links', rowAct: r => editLink(r, 'links') },
+      cols: [['Website', siteCell], ['Target URL', r => lnk(r.x.target_url)], ['Anchor text', r => esc(r.x.anchor_text || '—')], ['DR / Traffic', drCell]], kind: 'links', rowAct: r => editLink(r, 'links') },
     myexch: { label: 'Exchange links', sub: 'Links on your own exchange websites.', list: linkRows(w => w.deal_type === 'exchange'),
-      cols: [['Website', siteCell], ['Link sent', r => lnk(r.x.target_url)], ['Anchor text', r => esc(r.x.anchor_text || '—')], ['Our live link', r => lnk(r.x.live_url)],
+      cols: [['Website', siteCell], ['Target URL', r => lnk(r.x.target_url)], ['Anchor text', r => esc(r.x.anchor_text || '—')], ['Our live link', r => lnk(r.x.live_url)],
         ['Their link', r => `${lnk(r.x.their_link)}${r.cur && r.w.their_link_live ? ' (live)' : ''}`], ['Status', r => (r.cur ? pill(r.w) : '<span class="pill green">Done</span>')], ['DR / Traffic', drCell]], kind: 'exch',
       rowAct: r => (r.cur && r.w.status === 'live' && !r.w.their_link_live ? B('theirlive', r.w.id, 'Their link is live', true) : '') + editLink(r, 'exch') },
     mynext: { label: 'Next link possible', sub: 'Your own finished websites. Add the next link.', list: mineList.filter(nextPossible),
       cols: [['Website', siteCell], ['Links placed', r => `${linkNo(r.w)}`], ['DR / Traffic', drCell]], rowAct: r => ownActions(r.w) + editDel(r.w), wrap: true },
     myinv: { label: 'Invoices and payments', sub: 'Invoices for your own paid websites.', list: linkRows(w => w.deal_type === 'paid'),
-      cols: [['Website', siteCell], ['Link sent', r => lnk(r.x.target_url)], ['Invoice', r => (r.x.invoice_url ? lnk(r.x.invoice_url) : 'No invoice link yet')], ['Amount', r => money(r.x.price)],
+      cols: [['Website', siteCell], ['Target URL', r => lnk(r.x.target_url)], ['Invoice', r => (r.x.invoice_url ? lnk(r.x.invoice_url) : 'No invoice link yet')], ['Amount', r => money(r.x.price)],
         ['Status', r => (r.cur ? pill(r.w) : '<span class="pill green">Paid</span>')], ['DR / Traffic', drCell]],
       kind: 'inv', rowAct: r => (r.cur && ['live', 'invoice_received'].includes(r.w.status) ? invBtns(r.w) : '') + editLink(r, 'inv') },
     needs: { label: 'Needs a link (Approved)', sub: 'Approved websites that are waiting for a target URL and anchor.', list: ws.filter(w => w.status === 'approved'),
@@ -544,16 +544,16 @@ const actions = {
     const w = site(el.dataset.id), i = +el.dataset.i, k = el.dataset.k, x = i >= 0 ? hist(w)[i] : w;
     if (!x) return;
     const cur = i < 0;
-    const rows = k === 'links' ? [['Website', esc(w.domain)], ['Link sent', lnk(x.target_url)], ['Anchor text', esc(x.anchor_text || '—')]]
-      : k === 'exch' ? [['Website', esc(w.domain)], ['Link sent', lnk(x.target_url)], ['Anchor text', esc(x.anchor_text || '—')], ['Our live link', lnk(x.live_url)], ['Their link', `${lnk(x.their_link)}${cur && w.their_link_live ? ' (live)' : ''}`]]
-      : [['Link sent', lnk(x.target_url)], ['Invoice', x.invoice_url ? lnk(x.invoice_url) : 'No invoice link yet'], ['Amount', money(x.price)], ['Status', cur ? pill(w) : '<span class="pill green">Paid</span>']];
+    const rows = k === 'links' ? [['Website', esc(w.domain)], ['Target URL', lnk(x.target_url)], ['Anchor text', esc(x.anchor_text || '—')]]
+      : k === 'exch' ? [['Website', esc(w.domain)], ['Target URL', lnk(x.target_url)], ['Anchor text', esc(x.anchor_text || '—')], ['Our live link', lnk(x.live_url)], ['Their link', `${lnk(x.their_link)}${cur && w.their_link_live ? ' (live)' : ''}`]]
+      : [['Target URL', lnk(x.target_url)], ['Invoice', x.invoice_url ? lnk(x.invoice_url) : 'No invoice link yet'], ['Amount', money(x.price)], ['Status', cur ? pill(w) : '<span class="pill green">Paid</span>']];
     openDrawer(w.domain, kvRows(rows), 'detail-link', w.id);
   },
   editlink: el => {
     const w = site(el.dataset.id), i = +el.dataset.i, k = el.dataset.k, x = i >= 0 ? hist(w)[i] : w;
     if (!x) return;
     const inp = (name, label, v, ph) => `<label>${label}</label><input name="${name}" value="${esc(v || '')}" ${ph ? `placeholder="${ph}"` : ''}>`;
-    const fields = inp('target_url', 'Link sent', x.target_url, 'https://client-site.com/page') +
+    const fields = inp('target_url', 'Target URL', x.target_url, 'https://client-site.com/page') +
       (k === 'links' ? inp('anchor_text', 'Anchor text', x.anchor_text) : k === 'exch' ? inp('anchor_text', 'Anchor text', x.anchor_text) + inp('live_url', 'Our live link', x.live_url, 'https://') + inp('their_link', 'Their link', x.their_link, 'https://') : inp('invoice_url', 'Invoice', x.invoice_url, 'Link or PDF URL'));
     openDrawer('Edit link ' + (i >= 0 ? i + 1 : hist(w).length + 1) + ' of ' + w.domain, `<form data-form="editlink" data-id="${w.id}" data-i="${i}" data-k="${k}">${fields}<div style="margin-top:14px"><button class="btn primary big" type="submit">Save changes</button></div></form>`, 'form', w.id);
   },
