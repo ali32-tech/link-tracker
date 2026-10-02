@@ -334,16 +334,24 @@ const ownActions = w => {
 function sectionDefs(allWs) {
   const mineList = allWs.filter(w => w.member_id === S.profile.id), ws = allWs.filter(w => w.member_id !== S.profile.id);
   const act = html => (eff().role === 'boss' ? html : '');
+  const linkRows = pred => mineList.filter(pred).flatMap(w => [...hist(w).map(x => ({ w, x, cur: false })), ...(['sent', 'live', 'invoice_received', 'paid'].includes(w.status) && w.target_url ? [{ w, x: w, cur: true }] : [])]);
+  const siteCell = r => `<b>${esc(r.w.domain)}</b>`;
+  const drCell = r => `${r.w.da ?? '—'} / ${r.w.traffic ?? '—'}`;
+  const editDel = w => (S.preview ? '' : `<button class="btn sm" data-act="edit" data-id="${w.id}">Edit</button><button class="btn sm danger" data-act="del" data-id="${w.id}">Delete</button>`);
   return {
     mine: { label: 'My websites', sub: 'Websites you add yourself. They need no approval and nobody else can see them.', list: mineList, add: true, own: true },
-    mylinks: { label: 'Website links', sub: 'Links you have sent to your own websites.', linksTable: true,
-      list: mineList.flatMap(w => [...hist(w).map(x => ({ w, t: x.target_url, n: x.anchor_text })), ...(['sent', 'live', 'invoice_received', 'paid'].includes(w.status) && w.target_url ? [{ w, t: w.target_url, n: w.anchor_text }] : [])]) },
-    myexch: { label: 'My exchange links to place', sub: 'Your own exchange websites that are live. Place their link.', list: mineList.filter(w => w.deal_type === 'exchange' && w.status === 'live' && !w.their_link_live),
-      extra: [['Our live link', w => lnk(w.live_url)], ['Their link', w => lnk(w.their_link)]], act: w => ownActions(w) },
-    mynext: { label: 'My next links', sub: 'Your own finished websites. Add the next link.', list: mineList.filter(nextPossible),
-      extra: [['Links placed', w => `${linkNo(w)}`]], act: w => ownActions(w) },
-    myinv: { label: 'My invoices and payments', sub: 'Your own paid deals that are live.', list: mineList.filter(w => w.deal_type === 'paid' && ['live', 'invoice_received'].includes(w.status)),
-      extra: [['Our live link', w => lnk(w.live_url)], ['Invoice', w => (w.invoice_url ? lnk(w.invoice_url) : 'No invoice link yet')]], act: w => ownActions(w) },
+    mylinks: { label: 'Website links', sub: 'Links you have sent to your own websites.', list: linkRows(() => true),
+      cols: [['Website', siteCell], ['Link sent', r => lnk(r.x.target_url)], ['Anchor text', r => esc(r.x.anchor_text || '—')], ['DR / Traffic', drCell]], rowAct: r => editDel(r.w) },
+    myexch: { label: 'Exchange links', sub: 'Links on your own exchange websites.', list: linkRows(w => w.deal_type === 'exchange'),
+      cols: [['Website', siteCell], ['Link sent', r => lnk(r.x.target_url)], ['Anchor text', r => esc(r.x.anchor_text || '—')], ['Our live link', r => lnk(r.x.live_url)],
+        ['Their link', r => `${lnk(r.x.their_link)}${r.cur && r.w.their_link_live ? ' (live)' : ''}`], ['Status', r => (r.cur ? pill(r.w) : '<span class="pill green">Done</span>')], ['DR / Traffic', drCell]],
+      rowAct: r => (r.cur && r.w.status === 'live' && !r.w.their_link_live ? B('theirlive', r.w.id, 'Their link is live', true) : '') + editDel(r.w) },
+    mynext: { label: 'Next link possible', sub: 'Your own finished websites. Add the next link.', list: mineList.filter(nextPossible),
+      cols: [['Website', siteCell], ['Links placed', r => `${linkNo(r.w)}`], ['DR / Traffic', drCell]], rowAct: r => ownActions(r.w) + editDel(r.w), wrap: true },
+    myinv: { label: 'Invoices and payments', sub: 'Invoices for your own paid websites.', list: linkRows(w => w.deal_type === 'paid'),
+      cols: [['Website', siteCell], ['Link sent', r => lnk(r.x.target_url)], ['Invoice', r => (r.x.invoice_url ? lnk(r.x.invoice_url) : 'No invoice link yet')], ['Amount', r => money(r.x.price)],
+        ['Status', r => (r.cur ? pill(r.w) : '<span class="pill green">Paid</span>')], ['DR / Traffic', drCell]],
+      rowAct: r => (r.cur && ['live', 'invoice_received'].includes(r.w.status) ? invBtns(r.w) : '') + editDel(r.w) },
     needs: { label: 'Needs a link (Approved)', sub: 'Approved websites that are waiting for a target URL and anchor.', list: ws.filter(w => w.status === 'approved'),
       extra: [['Possible links', w => w.possible_links ?? '?']], act: w => act(`${B('addlink', w.id, 'Add link', true)}<button class="btn" data-act="bossedit" data-id="${w.id}">Edit</button><button class="btn danger" data-act="reject" data-id="${w.id}">Reject</button>`) },
     inv: { label: 'Invoices and payments', sub: 'Paid deals that are live.', list: ws.filter(w => w.deal_type === 'paid' && ['live', 'invoice_received'].includes(w.status)),
@@ -376,10 +384,11 @@ function mineHeader(list) {
 function sectionView(key) {
   const d = sectionDefs(visibleSites())[key];
   const all = d.list;
-  if (d.linksTable) {
-    return `<h2>${d.label} <span class="badge">${d.list.length}</span></h2><p class="sub">${d.sub}</p>
-      ${d.list.length ? `<div class="tablewrap"><table><thead><tr><th>Website</th><th>Link sent</th><th>Anchor text</th><th>DR / Traffic</th></tr></thead><tbody>
-      ${d.list.map(r => `<tr data-act="open" data-id="${r.w.id}"><td><b>${esc(r.w.domain)}</b></td><td>${lnk(r.t)}</td><td>${esc(r.n || '—')}</td><td>${r.w.da ?? '—'} / ${r.w.traffic ?? '—'}</td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">No links sent yet.</div>'}`;
+  if (d.cols) {
+    const rows = d.wrap ? d.list.map(w => ({ w, x: w, cur: true })) : d.list;
+    return `<h2>${d.label} <span class="badge">${rows.length}</span></h2><p class="sub">${d.sub}</p>
+      ${rows.length ? `<div class="tablewrap"><table><thead><tr>${d.cols.map(([l]) => `<th>${l}</th>`).join('')}<th>Action</th></tr></thead><tbody>
+      ${rows.map(r => `<tr data-act="open" data-id="${r.w.id}">${d.cols.map(([, fn]) => `<td>${fn(r)}</td>`).join('')}<td class="nowrap">${d.rowAct(r)}</td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">Nothing here right now.</div>'}`;
   }
   const extra = d.extra || [['Updated', w => (w.updated_at || '').slice(0, 10)]];
   const hasAct = d.own || d.act;
