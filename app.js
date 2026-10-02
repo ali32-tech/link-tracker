@@ -318,11 +318,11 @@ const ownStep = w => (w.member_id !== S.profile.id || S.preview ? '' : w.status 
   : w.status === 'sent' ? `<button class="btn primary" data-act="livebtn" data-id="${w.id}">Link is live</button>` : '');
 const B = (act, id, label, primary) => `<button class="btn ${primary ? 'primary' : ''}" data-act="${act}" data-id="${id}">${label}</button>`;
 
+const invBtns = w => (w.status === 'live' ? B('invoice', w.id, 'Invoice received', true) + B('paid', w.id, 'Mark as paid') : B('paid', w.id, 'Mark as paid', true));
 const ownActions = w => {
   if (S.preview) return '';
   if (w.status === 'approved') return B('addlink', w.id, 'Add link', true);
-  if (w.deal_type === 'paid' && w.status === 'live') return B('invoice', w.id, 'Invoice received', true);
-  if (w.deal_type === 'paid' && w.status === 'invoice_received') return B('paid', w.id, 'Mark as paid', true);
+  if (w.deal_type === 'paid' && ['live', 'invoice_received'].includes(w.status)) return invBtns(w);
   if (w.deal_type === 'exchange' && w.status === 'live' && !w.their_link_live) return B('theirlive', w.id, 'Their link is live', true);
   if (nextPossible(w)) return B('nextlink', w.id, 'Add next link', true);
   return '';
@@ -343,7 +343,7 @@ function sectionDefs(allWs) {
       extra: [['Possible links', w => w.possible_links ?? '?']], act: w => act(`${B('addlink', w.id, 'Add link', true)}<button class="btn" data-act="bossedit" data-id="${w.id}">Edit</button><button class="btn danger" data-act="reject" data-id="${w.id}">Reject</button>`) },
     inv: { label: 'Invoices and payments', sub: 'Paid deals that are live.', list: ws.filter(w => w.deal_type === 'paid' && ['live', 'invoice_received'].includes(w.status)),
       extra: [['Our live link', w => lnk(w.live_url)], ['Invoice', w => (w.invoice_url ? lnk(w.invoice_url) : 'No invoice link yet')]],
-      act: w => act(w.status === 'live' ? B('invoice', w.id, 'Invoice received', true) : B('paid', w.id, 'Mark as paid', true)) },
+      act: w => act(invBtns(w)) },
     exch: { label: 'Exchange links to place', sub: 'Exchange deals that are live. Place their link somewhere.', list: ws.filter(w => w.deal_type === 'exchange' && w.status === 'live' && !w.their_link_live),
       extra: [['Our live link', w => lnk(w.live_url)], ['Their link', w => lnk(w.their_link)]], act: w => act(B('theirlive', w.id, 'Their link is live', true)) },
     next: { label: 'Next link possible on the same website', sub: 'Finished websites that can take more links.', list: ws.filter(nextPossible),
