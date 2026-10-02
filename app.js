@@ -415,6 +415,7 @@ function sectionView(key) {
 }
 
 const ICONS = {
+  wlinks: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/>',
   trash: '<path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 10v7M14 10v7"/>',
   mine: '<circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-7 8-7s8 3 8 7"/>',
   review: '<path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/>',
@@ -441,9 +442,9 @@ function sidebar() {
     const row = ([k, l, n, ic], sub) => btn(k, l, n, S.nav === k, 'nav', ic).replace('class="nav ', `class="nav ${sub ? 'sub ' : ''}`);
     const kids = (open, list) => (open ? list.map(r => row(r, true)).join('') : '');
     items = row(['mine', 'My websites', d.mine.list.length, 'mine']).replace(/<\/button>$/, chev(S.mineOpen, 'minetoggle')) +
-      kids(S.mineOpen, [['mylinks', 'Website links', d.mylinks.list.length, 'needs'], ['myexch', 'Exchange links', d.myexch.list.length, 'exch'], ['mynext', 'Next link possible', d.mynext.list.length, 'next'], ['myinv', 'Invoices & payments', d.myinv.list.length, 'inv']]) +
+      kids(S.mineOpen, [['mylinks', 'Website links', d.mylinks.list.length, 'wlinks'], ['myexch', 'Exchange links', d.myexch.list.length, 'exch'], ['mynext', 'Next link possible', d.mynext.list.length, 'next'], ['myinv', 'Invoices & payments', d.myinv.list.length, 'inv']]) +
       row(['home', 'Review', ws.filter(w => w.status === 'boss_review').length, 'review']).replace(/<\/button>$/, chev(S.revOpen, 'revtoggle')) +
-      kids(S.revOpen, [['needs', 'Needs a link', d.needs.list.length, 'needs'], ['rlinks', 'Website links' + (ws.some(w => w.change_request) ? ' <span class="dot"></span>' : ''), d.rlinks.list.length, 'needs'], ['exch', 'Exchange links', d.exch.list.length, 'exch'], ['next', 'Next link possible', d.next.list.length, 'next']]) +
+      kids(S.revOpen, [['needs', 'Needs a link', d.needs.list.length, 'needs'], ['rlinks', 'Website links' + (ws.some(w => w.change_request) ? ' <span class="dot"></span>' : ''), d.rlinks.list.length, 'wlinks'], ['exch', 'Exchange links', d.exch.list.length, 'exch'], ['next', 'Next link possible', d.next.list.length, 'next']]) +
       row(['inv', 'Invoices & payments', d.inv.list.length, 'inv']) + row(['rejected', 'Rejected', d.rejected.list.length, 'rejected']) + row(['all', 'All websites', d.all.list.length, 'all']) +
       row(['trash', 'Trash', d.trash.list.length, 'trash']).replace('class="nav ', 'class="nav trashbtn ');
   } else if (role === 'manager') {
@@ -572,7 +573,7 @@ const actions = {
     if (!x) return;
     const inp = (name, label, v, ph) => `<label>${label}</label><input name="${name}" value="${esc(v || '')}" ${ph ? `placeholder="${ph}"` : ''}>`;
     const fields = inp('target_url', 'Target URL', x.target_url, 'https://client-site.com/page') +
-      (k === 'links' ? inp('anchor_text', 'Anchor text', x.anchor_text) : k === 'exch' ? inp('anchor_text', 'Anchor text', x.anchor_text) + inp('live_url', 'Our live link', x.live_url, 'https://') + inp('their_link', 'Their link', x.their_link, 'https://') : inp('invoice_url', 'Invoice', x.invoice_url, 'Link or PDF URL'));
+      (k === 'links' ? inp('anchor_text', 'Anchor text', x.anchor_text) + (i < 0 && !ownBoss(w) ? `<label>Possible links</label><input type="number" min="1" name="possible_links" value="${w.possible_links ?? 1}">` : '') : k === 'exch' ? inp('anchor_text', 'Anchor text', x.anchor_text) + inp('live_url', 'Our live link', x.live_url, 'https://') + inp('their_link', 'Their link', x.their_link, 'https://') : inp('invoice_url', 'Invoice', x.invoice_url, 'Link or PDF URL'));
     openDrawer('Edit link ' + (i >= 0 ? i + 1 : hist(w).length + 1) + ' of ' + w.domain, `<form data-form="editlink" data-id="${w.id}" data-i="${i}" data-k="${k}">${fields}<div style="margin-top:14px"><button class="btn primary big" type="submit">Save changes</button></div></form>`, 'form', w.id);
   },
   morelink: () => { const c = $('#morelinks'); if (c) c.insertAdjacentHTML('beforeend', pairHtml()); },
@@ -760,6 +761,7 @@ const forms = {
     const w = site(f.dataset.id), i = +f.dataset.i, k = f.dataset.k;
     const keys = k === 'links' ? ['target_url', 'anchor_text'] : k === 'exch' ? ['target_url', 'anchor_text', 'live_url', 'their_link'] : ['target_url', 'invoice_url'];
     const vals = Object.fromEntries(keys.map(n => [n, txt(d.get(n))]));
+    if (k === 'links' && i < 0 && d.get('possible_links') != null) vals.possible_links = Math.max(1, num(d.get('possible_links')) || 1);
     if (i < 0) return upd(w.id, vals, 'Saved');
     const history = hist(w).map((x, n) => (n === i ? { ...x, ...vals } : x));
     return upd(w.id, { link_history: history }, 'Saved');
