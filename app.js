@@ -454,31 +454,23 @@ function memberView() {
     <div class="stat"><b>${live}</b><span>Live this month</span></div><div class="stat"><b>${money(live * S.teamRate)}</b><span>My earnings this month</span></div></div>
     <div class="toolbar"><button class="btn primary" data-act="add" ${readOnly() ? 'disabled' : ''}>+ Add website</button>
       <input type="search" id="memq" placeholder="Search" value="${esc(S.mem.q)}" data-input="memq"></div>
-    ${list.length ? `<div class="cards">${list.map(memberCard).join('')}</div>` :
+    ${list.length ? `<div class="tablewrap"><table><thead><tr><th>Website</th><th>Deal</th><th class="num">Price</th><th>DR / Traffic</th><th>Status</th><th>Target URL</th><th>Anchor text</th><th>Note</th><th>Action</th></tr></thead><tbody>${list.map(memberRow).join('')}</tbody></table></div>` :
       `<div class="empty">${ws.length ? 'No websites in this view.' : 'No websites yet. Click + Add website when a site says yes.'}</div>`}`;
 }
 
-function memberCard(w) {
-  const badge = (w.possible_links > 1 || hist(w).length) ? `<span class="badge">Link ${linkNo(w)} / ${w.possible_links ?? '?'}</span>` : '';
-  let next = '';
-  const more = queueOf(w).length ? `<div class="hint">${queueOf(w).length} more link(s) will follow after this one.</div>` : '';
-  if (w.status === 'link_ready') {
-    next = `<div class="next"><div><span class="k">Target URL</span><br>${lnk(w.target_url)}</div><div><span class="k">Anchor text</span><br>${esc(w.anchor_text)}</div>
-      <button class="btn" data-act="copymsg" data-id="${w.id}">Copy message for website</button>
-      <button class="btn primary big" data-act="sentbtn" data-id="${w.id}">Link sent to website</button>${more}</div>`;
-  } else if (w.status === 'sent') {
-    next = `<div class="next"><span>Waiting for the website to publish it.</span><button class="btn primary big" data-act="livebtn" data-id="${w.id}">Link is live</button>${more}</div>`;
-  } else {
-    const t = {
-      boss_review: 'Under review', approved: "Waiting for the link", rejected: 'Rejected: ' + (w.reject_reason || 'no reason given'),
-      invoice_received: 'Invoice received', paid: 'Paid',
-      live: w.deal_type === 'exchange' ? (w.their_link_live ? 'Live. Exchange complete' : 'Live. Waiting for the exchange link') : 'Live. Invoice in progress',
-    }[w.status];
-    next = `<div class="next">${esc(t)}</div>`;
-  }
-  return `<article class="card"><div class="row"><span class="dom">${esc(w.domain)}</span>${pill(w)}</div>
-    <div class="meta"><span>${dealLabel(w.deal_type)}</span>${w.deal_type === 'paid' ? `<span>${money(w.price)}</span>` : ''}${w.possible_links ? `<span>${w.possible_links} possible links</span>` : ''}${badge}</div>${next}
-    <div class="foot"><button class="btn sm" data-act="edit" data-id="${w.id}">Edit</button><button class="btn sm danger" data-act="del" data-id="${w.id}">Delete</button></div></article>`;
+function memberRow(w) {
+  const t = {
+    boss_review: 'Under review', approved: 'Waiting for the link', link_ready: 'Send this link to the website', sent: 'Waiting for the website to publish it',
+    rejected: 'Rejected: ' + (w.reject_reason || 'no reason given'), invoice_received: 'Invoice received', paid: 'Paid',
+    live: w.deal_type === 'exchange' ? (w.their_link_live ? 'Live. Exchange complete' : 'Live. Waiting for the exchange link') : 'Live. Invoice in progress',
+  }[w.status];
+  const more = queueOf(w).length ? ` ${queueOf(w).length} more link(s) will follow.` : '';
+  const showLink = ['link_ready', 'sent'].includes(w.status);
+  const step = w.status === 'link_ready' ? `<button class="btn" data-act="copymsg" data-id="${w.id}">Copy message</button><button class="btn primary" data-act="sentbtn" data-id="${w.id}">Link sent</button>`
+    : w.status === 'sent' ? `<button class="btn primary" data-act="livebtn" data-id="${w.id}">Link is live</button>` : '';
+  return `<tr><td><b>${esc(w.domain)}</b></td><td>${dealLabel(w.deal_type)}</td><td class="num">${money(w.price)}</td><td>${w.da ?? '—'} / ${w.traffic ?? '—'}</td>
+    <td>${pill(w)}</td><td>${showLink ? lnk(w.target_url) : '—'}</td><td>${showLink ? esc(w.anchor_text || '—') : '—'}</td><td>${esc(t + more)}</td>
+    <td class="nowrap">${step}<button class="btn sm" data-act="edit" data-id="${w.id}">Edit</button><button class="btn sm danger" data-act="del" data-id="${w.id}">Delete</button></td></tr>`;
 }
 
 function siteForm(w) {
