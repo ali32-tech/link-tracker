@@ -167,9 +167,8 @@ begin
   elsif r = 'boss' then
     new.url := old.url; new.domain := old.domain; new.contact_email := old.contact_email;
     new.deal_type := old.deal_type; new.price := old.price; new.da := old.da;
-    new.traffic := old.traffic; new.notes := old.notes; new.live_url := old.live_url;
-    new.their_link := old.their_link; new.invoice_url := old.invoice_url;
-    new.live_date := old.live_date; new.link_history := old.link_history;
+    new.traffic := old.traffic; new.notes := old.notes;
+    new.live_date := old.live_date;
     if new.status is distinct from old.status
        and new.status not in ('boss_review','approved','rejected','link_ready','invoice_received','paid') then
       raise exception 'The Director cannot set this status';

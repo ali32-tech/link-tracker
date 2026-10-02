@@ -334,32 +334,42 @@ const ownActions = w => {
 function sectionDefs(allWs) {
   const mineList = allWs.filter(w => w.member_id === S.profile.id), ws = allWs.filter(w => w.member_id !== S.profile.id);
   const act = html => (eff().role === 'boss' ? html : '');
-  const linkRows = pred => mineList.filter(pred).flatMap(w => [...hist(w).map((x, i) => ({ w, x, cur: false, i })), ...(['sent', 'live', 'invoice_received', 'paid'].includes(w.status) && w.target_url ? [{ w, x: w, cur: true, i: -1 }] : [])]);
+  const linkRowsOf = (base, pred) => base.filter(pred).flatMap(w => [...hist(w).map((x, i) => ({ w, x, cur: false, i })), ...(['sent', 'live', 'invoice_received', 'paid'].includes(w.status) && w.target_url ? [{ w, x: w, cur: true, i: -1 }] : [])]);
   const siteCell = r => `<b>${esc(r.w.domain)}</b>`;
   const drCell = r => `${r.w.da ?? '—'} / ${r.w.traffic ?? '—'}`;
   const editLink = (r, k) => (S.preview ? '' : `<button class="btn sm" data-act="editlink" data-id="${r.w.id}" data-i="${r.i}" data-k="${k}">Edit</button><button class="btn sm danger" data-act="del" data-id="${r.w.id}">Delete</button>`);
   const editDel = w => (S.preview ? '' : `<button class="btn sm" data-act="edit" data-id="${w.id}">Edit</button><button class="btn sm danger" data-act="del" data-id="${w.id}">Delete</button>`);
+  const mk = (base, mine) => {
+    const rows = pred => linkRowsOf(base, pred);
+    const who = mine ? [] : [['Name', r => esc(memberName(r.w.member_id))]];
+    const site1 = [['Website', siteCell], ...who];
+    const who2 = mine ? 'your own' : 'team';
+    return {
+      links: { label: 'Website links', sub: `Links sent to ${who2} websites.`, list: rows(() => true),
+        cols: [...site1, ['Target URL', r => lnk(r.x.target_url)], ['Anchor text', r => esc(r.x.anchor_text || '—')], ['DR / Traffic', drCell]], kind: 'links', rowAct: r => editLink(r, 'links') },
+      exch: { label: 'Exchange links', sub: `Links on ${who2} exchange websites.`, list: rows(w => w.deal_type === 'exchange'),
+        cols: [...site1, ['Target URL', r => lnk(r.x.target_url)], ['Anchor text', r => esc(r.x.anchor_text || '—')], ['Our live link', r => lnk(r.x.live_url)],
+          ['Their link', r => `${lnk(r.x.their_link)}${r.cur && r.w.their_link_live ? ' (live)' : ''}`], ['Status', r => (r.cur ? pill(r.w) : '<span class="pill green">Done</span>')], ['DR / Traffic', drCell]], kind: 'exch',
+        rowAct: r => (r.cur && r.w.status === 'live' && !r.w.their_link_live ? B('theirlive', r.w.id, 'Their link is live', true) : '') + editLink(r, 'exch') },
+      inv: { label: 'Invoices and payments', sub: `Invoices for ${who2} paid websites.`, list: rows(w => w.deal_type === 'paid'),
+        cols: [...site1, ['Target URL', r => lnk(r.x.target_url)], ['Invoice', r => (r.x.invoice_url ? lnk(r.x.invoice_url) : 'No invoice link yet')], ['Amount', r => money(r.x.price)],
+          ['Status', r => (r.cur ? pill(r.w) : '<span class="pill green">Paid</span>')], ['DR / Traffic', drCell]],
+        kind: 'inv', rowAct: r => (r.cur && ['live', 'invoice_received'].includes(r.w.status) ? invBtns(r.w) : '') + editLink(r, 'inv') },
+    };
+  };
+  const my = mk(mineList, true), team = mk(ws, false);
   return {
     mine: { label: 'My websites', sub: 'Websites you add yourself. They need no approval and nobody else can see them.', list: mineList, add: true, own: true },
-    mylinks: { label: 'Website links', sub: 'Links you have sent to your own websites.', list: linkRows(() => true),
-      cols: [['Website', siteCell], ['Target URL', r => lnk(r.x.target_url)], ['Anchor text', r => esc(r.x.anchor_text || '—')], ['DR / Traffic', drCell]], kind: 'links', rowAct: r => editLink(r, 'links') },
-    myexch: { label: 'Exchange links', sub: 'Links on your own exchange websites.', list: linkRows(w => w.deal_type === 'exchange'),
-      cols: [['Website', siteCell], ['Target URL', r => lnk(r.x.target_url)], ['Anchor text', r => esc(r.x.anchor_text || '—')], ['Our live link', r => lnk(r.x.live_url)],
-        ['Their link', r => `${lnk(r.x.their_link)}${r.cur && r.w.their_link_live ? ' (live)' : ''}`], ['Status', r => (r.cur ? pill(r.w) : '<span class="pill green">Done</span>')], ['DR / Traffic', drCell]], kind: 'exch',
-      rowAct: r => (r.cur && r.w.status === 'live' && !r.w.their_link_live ? B('theirlive', r.w.id, 'Their link is live', true) : '') + editLink(r, 'exch') },
+    mylinks: my.links,
+    myexch: my.exch,
     mynext: { label: 'Next link possible', sub: 'Your own finished websites. Add the next link.', list: mineList.filter(nextPossible),
       cols: [['Website', siteCell], ['Links placed', r => `${linkNo(r.w)}`], ['DR / Traffic', drCell]], rowAct: r => ownActions(r.w) + editDel(r.w), wrap: true },
-    myinv: { label: 'Invoices and payments', sub: 'Invoices for your own paid websites.', list: linkRows(w => w.deal_type === 'paid'),
-      cols: [['Website', siteCell], ['Target URL', r => lnk(r.x.target_url)], ['Invoice', r => (r.x.invoice_url ? lnk(r.x.invoice_url) : 'No invoice link yet')], ['Amount', r => money(r.x.price)],
-        ['Status', r => (r.cur ? pill(r.w) : '<span class="pill green">Paid</span>')], ['DR / Traffic', drCell]],
-      kind: 'inv', rowAct: r => (r.cur && ['live', 'invoice_received'].includes(r.w.status) ? invBtns(r.w) : '') + editLink(r, 'inv') },
+    myinv: my.inv,
     needs: { label: 'Needs a link (Approved)', sub: 'Approved websites that are waiting for a target URL and anchor.', list: ws.filter(w => w.status === 'approved'),
       extra: [['Possible links', w => w.possible_links ?? '?']], act: w => act(`${B('addlink', w.id, 'Add link', true)}<button class="btn" data-act="bossedit" data-id="${w.id}">Edit</button><button class="btn danger" data-act="reject" data-id="${w.id}">Reject</button>`) },
-    inv: { label: 'Invoices and payments', sub: 'Paid deals that are live.', list: ws.filter(w => w.deal_type === 'paid' && ['live', 'invoice_received'].includes(w.status)),
-      extra: [['Our live link', w => lnk(w.live_url)], ['Invoice', w => (w.invoice_url ? lnk(w.invoice_url) : 'No invoice link yet')]],
-      act: w => act(invBtns(w)) },
-    exch: { label: 'Exchange links to place', sub: 'Exchange deals that are live. Place their link somewhere.', list: ws.filter(w => w.deal_type === 'exchange' && w.status === 'live' && !w.their_link_live),
-      extra: [['Our live link', w => lnk(w.live_url)], ['Their link', w => lnk(w.their_link)]], act: w => act(B('theirlive', w.id, 'Their link is live', true)) },
+    inv: team.inv,
+    rlinks: team.links,
+    exch: team.exch,
     next: { label: 'Next link possible on the same website', sub: 'Finished websites that can take more links.', list: ws.filter(nextPossible),
       extra: [['Links placed', w => `${linkNo(w)} of ${w.possible_links}`]], act: w => act(B('nextlink', w.id, 'Add next link', true)) },
     rejected: { label: 'Rejected', sub: 'Websites you have rejected.', list: ws.filter(w => w.status === 'rejected'), extra: [['Reason', w => esc(w.reject_reason || '—')], ['Updated', w => (w.updated_at || '').slice(0, 10)]] },
@@ -432,7 +442,7 @@ function sidebar() {
     items = row(['mine', 'My websites', d.mine.list.length, 'mine']).replace(/<\/button>$/, chev(S.mineOpen, 'minetoggle')) +
       kids(S.mineOpen, [['mylinks', 'Website links', d.mylinks.list.length, 'needs'], ['myexch', 'Exchange links', d.myexch.list.length, 'exch'], ['mynext', 'Next link possible', d.mynext.list.length, 'next'], ['myinv', 'Invoices & payments', d.myinv.list.length, 'inv']]) +
       row(['home', 'Review', ws.filter(w => w.status === 'boss_review').length, 'review']).replace(/<\/button>$/, chev(S.revOpen, 'revtoggle')) +
-      kids(S.revOpen, [['needs', 'Needs a link', d.needs.list.length, 'needs'], ['exch', 'Exchange links', d.exch.list.length, 'exch'], ['next', 'Next link possible', d.next.list.length, 'next']]) +
+      kids(S.revOpen, [['needs', 'Needs a link', d.needs.list.length, 'needs'], ['rlinks', 'Website links', d.rlinks.list.length, 'needs'], ['exch', 'Exchange links', d.exch.list.length, 'exch'], ['next', 'Next link possible', d.next.list.length, 'next']]) +
       row(['inv', 'Invoices & payments', d.inv.list.length, 'inv']) + row(['rejected', 'Rejected', d.rejected.list.length, 'rejected']) + row(['all', 'All websites', d.all.list.length, 'all']) +
       row(['trash', 'Trash', d.trash.list.length, 'trash']).replace('class="nav ', 'class="nav trashbtn ');
   } else if (role === 'manager') {
@@ -562,7 +572,7 @@ const actions = {
   showpw: el => { const i = el.previousElementSibling; i.type = i.type === 'password' ? 'text' : 'password'; el.textContent = i.type === 'password' ? 'Show' : 'Hide'; },
   logout: async () => { if (S.chan) sb.removeChannel(S.chan); await sb.auth.signOut(); },
   close: closeDrawer,
-  nav: el => { S.nav = el.dataset.v; S.revOpen = ['home', 'needs', 'exch', 'next'].includes(S.nav); S.mineOpen = ['mine', 'mylinks', 'myexch', 'mynext', 'myinv'].includes(S.nav); render(); window.scrollTo(0, 0); },
+  nav: el => { S.nav = el.dataset.v; S.revOpen = ['home', 'needs', 'rlinks', 'exch', 'next'].includes(S.nav); S.mineOpen = ['mine', 'mylinks', 'myexch', 'mynext', 'myinv'].includes(S.nav); render(); window.scrollTo(0, 0); },
   revtoggle: () => { S.revOpen = !S.revOpen; render(); },
   minetoggle: () => { S.mineOpen = !S.mineOpen; render(); },
   pipe: el => { S.mf.status = S.mf.status === el.dataset.v ? '' : el.dataset.v; render(); },
