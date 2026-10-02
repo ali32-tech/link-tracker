@@ -490,7 +490,7 @@ function sidebar() {
     items = [['home', 'Websites', 'all'], ['commission', 'Commission', 'commission'], ['settings', 'Settings', 'settings']].map(([k, l, ic]) => btn(k, l, null, S.nav === k, 'nav', ic)).join('');
   } else {
     const cnt = { all: () => true, action: needsAction, boss: w => ['boss_review', 'approved'].includes(w.status), live: w => LIVE_STATUSES.includes(w.status), rejected: w => w.status === 'rejected' };
-    items = [['all', 'All', 'all'], ['action', 'Action needed', 'action'], ['boss', 'Under review', 'review'], ['live', 'Live', 'live'], ['rejected', 'Rejected', 'rejected']].map(([k, l, ic]) => btn(k, l, ws.filter(cnt[k]).length, S.mem.f === k && S.nav === 'home', 'mfilter', ic)).join('') + btn('earn', 'Earnings', null, S.nav === 'earn', 'nav', 'commission') + btn('trash', 'Trash', S.trash.length, S.nav === 'trash', 'nav', 'trash').replace('class="nav ', 'class="nav trashbtn ');
+    items = [['all', 'All', 'all'], ['action', 'Action needed', 'action'], ['boss', 'Under review', 'review'], ['live', 'Live', 'live'], ['rejected', 'Rejected', 'rejected']].map(([k, l, ic]) => btn(k, l, ws.filter(cnt[k]).length, S.mem.f === k && S.nav === 'home', 'mfilter', ic)).join('') + btn('earn', 'Live links', null, S.nav === 'earn', 'nav', 'live') + btn('trash', 'Trash', S.trash.length, S.nav === 'trash', 'nav', 'trash').replace('class="nav ', 'class="nav trashbtn ');
   }
   return `<nav class="side" aria-label="Sections">${items}</nav>`;
 }
@@ -508,29 +508,24 @@ function bossView() {
 const needsAction = w => ['link_ready', 'sent'].includes(w.status);
 
 function earnView() {
-  const ym = S.month, rate = S.profile.rate != null ? +S.profile.rate : S.teamRate;
-  const rows = visibleSites().flatMap(w => [...hist(w).map(h => ({ w, t: h.target_url, n: h.anchor_text, d: h.live_date })), ...(LIVE_STATUSES.includes(w.status) ? [{ w, t: w.target_url, n: w.anchor_text, d: w.live_date }] : [])]).filter(r => (r.d || '').startsWith(ym)).sort((x, y) => (y.d || '').localeCompare(x.d || ''));
-  return `<h2>Earnings <span class="badge">${rows.length}</span></h2>
-    <div class="toolbar"><label style="margin:0">Month</label><input type="month" style="width:auto" value="${ym}" data-change="month"></div>
-    <div class="stats"><div class="stat tint-green"><b>${rows.length}</b><span>Live links</span></div><div class="stat tint-blue"><b>${money(rate)}</b><span>Rate per link</span></div><div class="stat tint-purple"><b>${money(rows.length * rate)}</b><span>Earned</span></div></div>
-    ${rows.length ? `<div class="tablewrap"><table><thead><tr><th>Website</th><th>Target URL</th><th>Anchor text</th><th>Live date</th><th class="num">Amount</th></tr></thead><tbody>${rows.map(r => `<tr><td><b>${esc(r.w.domain)}</b></td><td>${lnk(r.t)}</td><td>${esc(r.n || '—')}</td><td>${esc(r.d || '—')}</td><td class="num">${money(rate)}</td></tr>`).join('')}</tbody><tfoot><tr><td>Total</td><td></td><td></td><td></td><td class="num">${money(rows.length * rate)}</td></tr></tfoot></table></div>` : '<div class="empty">No live links in this month.</div>'}`;
+  const ym = S.month, all = !!S.liveAll;
+  const rows = visibleSites().flatMap(w => [...hist(w).map(h => ({ w, t: h.target_url, n: h.anchor_text, d: h.live_date })), ...(LIVE_STATUSES.includes(w.status) ? [{ w, t: w.target_url, n: w.anchor_text, d: w.live_date }] : [])])
+    .filter(r => all || (r.d || '').startsWith(ym)).sort((x, y) => (y.d || '').localeCompare(x.d || ''));
+  return `<h2>Live links <span class="badge">${rows.length}</span></h2>
+    <div class="toolbar"><label style="margin:0">Month</label><input type="month" style="width:auto" value="${ym}" data-change="month" ${all ? 'disabled' : ''}>
+      <button class="chip ${all ? 'on' : ''}" data-act="liveall">All time</button></div>
+    ${rows.length ? `<div class="tablewrap"><table><thead><tr><th>Website</th><th>Target URL</th><th>Anchor text</th><th>Live URL</th><th>Live date</th></tr></thead><tbody>${rows.map(r => `<tr data-act="open" data-id="${r.w.id}"><td><b>${esc(r.w.domain)}</b></td><td>${lnk(r.t)}</td><td>${esc(r.n || '—')}</td><td>${lnk(r.w.live_url)}</td><td>${esc(r.d || '—')}</td></tr>`).join('')}</tbody></table></div>` : `<div class="empty">${all ? 'No live links yet.' : 'No live links in this month.'}</div>`}`;
 }
 
 function memberView() {
   const ws = visibleSites();
-  const ym = S.month;
-  const live = ws.reduce((a, w) => a + liveCount(w, ym), 0);
   const f = S.mem.f, q = S.mem.q.trim().toLowerCase();
   const filt = {
     all: () => true, action: needsAction, boss: w => ['boss_review', 'approved'].includes(w.status),
     live: w => LIVE_STATUSES.includes(w.status), rejected: w => w.status === 'rejected',
   }[f];
   const list = ws.filter(w => filt(w) && (!q || w.domain.includes(q)));
-  return `<div class="stats"><div class="stat"><b>${ws.length}</b><span>My websites</span></div>
-    <div class="stat ${ws.filter(needsAction).length ? 'hot' : ''}"><b>${ws.filter(needsAction).length}</b><span>Action needed</span></div>
-    <div class="stat"><b>${live}</b><span>Live in ${ym}</span></div><div class="stat"><b>${money(live * (S.profile.rate != null ? +S.profile.rate : S.teamRate))}</b><span>My earnings in ${ym}</span></div></div>
-    <div class="toolbar"><button class="btn primary" data-act="add" ${readOnly() ? 'disabled' : ''}>+ Add website</button>
-      <label style="margin:0">Month</label><input type="month" style="width:auto" value="${ym}" data-change="month">
+  return `<div class="toolbar"><button class="btn primary" data-act="add" ${readOnly() ? 'disabled' : ''}>+ Add website</button>
       <input type="search" id="memq" placeholder="Search" value="${esc(S.mem.q)}" data-input="memq"></div>
     ${list.length ? `<div class="tablewrap"><table><thead><tr><th>Website</th><th>Deal</th><th class="num">Price</th><th>DR / Traffic</th><th>Status</th><th>Target URL</th><th>Anchor text</th><th>Note</th><th>Action</th></tr></thead><tbody>${list.map(memberRow).join('')}</tbody></table></div>` :
       `<div class="empty">${ws.length ? 'No websites in this view.' : 'No websites yet. Click + Add website when a site says yes.'}</div>`}`;
@@ -546,9 +541,10 @@ function memberRow(w) {
   const showLink = ['link_ready', 'sent'].includes(w.status);
   const step = w.status === 'link_ready' ? `<button class="btn" data-act="copymsg" data-id="${w.id}">Copy message</button><button class="btn primary" data-act="sentbtn" data-id="${w.id}">Link sent</button>`
     : w.status === 'sent' ? `<button class="btn primary" data-act="livebtn" data-id="${w.id}">Link is live</button><button class="btn" data-act="reqchange" data-id="${w.id}">${w.change_request ? 'Edit request' : 'Request change'}</button>` : '';
-  return `<tr><td><b>${esc(w.domain)}</b></td><td>${dealLabel(w.deal_type)}</td><td class="num">${money(w.price)}</td><td>${w.da ?? '—'} / ${w.traffic ?? '—'}</td>
+  const locked = LIVE_STATUSES.includes(w.status);
+  return `<tr data-act="open" data-id="${w.id}"><td><b>${esc(w.domain)}</b></td><td>${dealLabel(w.deal_type)}</td><td class="num">${money(w.price)}</td><td>${w.da ?? '—'} / ${w.traffic ?? '—'}</td>
     <td>${pill(w)}</td><td>${showLink ? lnk(w.target_url) : '—'}</td><td>${showLink ? esc(w.anchor_text || '—') : '—'}</td><td>${esc(t + more)}${w.change_request ? `<div class="mini hint2">Change requested: ${esc(w.change_request)}</div>` : ''}${w.change_done_at ? `<div class="mini ok">Admin updated the link. <button class="btn sm" data-act="ackdone" data-id="${w.id}">Got it</button></div>` : ''}</td>
-    <td class="nowrap">${step}<button class="btn sm" data-act="edit" data-id="${w.id}">Edit</button><button class="btn sm danger" data-act="del" data-id="${w.id}">Delete</button></td></tr>`;
+    <td class="nowrap">${step}${locked ? '' : `<button class="btn sm" data-act="edit" data-id="${w.id}">Edit</button><button class="btn sm danger" data-act="del" data-id="${w.id}">Delete</button>`}</td></tr>`;
 }
 
 function siteForm(w) {
@@ -601,6 +597,7 @@ function moreLinks(d) {
 }
 
 const actions = {
+  liveall: () => { S.liveAll = !S.liveAll; render(); },
   seltoggle: el => { S.sel = S.sel || new Set(); S.sel.has(el.dataset.id) ? S.sel.delete(el.dataset.id) : S.sel.add(el.dataset.id); render(); },
   selall: () => { const ids = S.trash.map(w => w.id); S.sel = (S.sel && S.sel.size === ids.length) ? new Set() : new Set(ids); render(); },
   async bulkrestore() {

@@ -136,6 +136,12 @@ begin
   new.id := old.id; new.member_id := old.member_id; new.created_at := old.created_at;
   if current_setting('app.bypass_guard', true) = '1' then return new; end if;
   if r <> 'boss' and old.member_id <> auth.uid() then new.deleted_at := old.deleted_at; end if;
+  if r = 'member' and old.status in ('live','invoice_received','paid') then
+    if (to_jsonb(new) - 'change_request' - 'change_done_at' - 'updated_at') is distinct from (to_jsonb(old) - 'change_request' - 'change_done_at' - 'updated_at') then
+      raise exception 'This website is live and can no longer be changed';
+    end if;
+    return new;
+  end if;
 
   if r = 'member' or (r = 'manager' and old.member_id = auth.uid()) then
     new.queued_links := old.queued_links;
@@ -340,7 +346,7 @@ create policy websites_update on public.websites for update to authenticated
   using ((public.auth_role() = 'boss' and public.visible_to_me(member_id)) or (public.auth_role() in ('member','manager') and member_id = auth.uid()))
   with check ((public.auth_role() = 'boss' and public.visible_to_me(member_id)) or (public.auth_role() in ('member','manager') and member_id = auth.uid()));
 create policy websites_delete on public.websites for delete to authenticated
-  using ((public.auth_role() in ('manager','boss') and public.visible_to_me(member_id)) or (public.auth_role() = 'member' and member_id = auth.uid()));
+  using ((public.auth_role() in ('manager','boss') and public.visible_to_me(member_id)) or (public.auth_role() = 'member' and member_id = auth.uid() and status not in ('live','invoice_received','paid')));
 create policy websites_insert on public.websites for insert to authenticated
   with check (public.auth_role() = 'manager' or (public.auth_role() in ('member','boss') and member_id = auth.uid()));
 
