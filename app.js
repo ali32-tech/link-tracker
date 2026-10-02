@@ -334,9 +334,10 @@ const ownActions = w => {
 function sectionDefs(allWs) {
   const mineList = allWs.filter(w => w.member_id === S.profile.id), ws = allWs.filter(w => w.member_id !== S.profile.id);
   const act = html => (eff().role === 'boss' ? html : '');
-  const linkRows = pred => mineList.filter(pred).flatMap(w => [...hist(w).map(x => ({ w, x, cur: false })), ...(['sent', 'live', 'invoice_received', 'paid'].includes(w.status) && w.target_url ? [{ w, x: w, cur: true }] : [])]);
+  const linkRows = pred => mineList.filter(pred).flatMap(w => [...hist(w).map((x, i) => ({ w, x, cur: false, i })), ...(['sent', 'live', 'invoice_received', 'paid'].includes(w.status) && w.target_url ? [{ w, x: w, cur: true, i: -1 }] : [])]);
   const siteCell = r => `<b>${esc(r.w.domain)}</b>`;
   const drCell = r => `${r.w.da ?? '—'} / ${r.w.traffic ?? '—'}`;
+  const editLink = (r, k) => (S.preview ? '' : `<button class="btn sm" data-act="editlink" data-id="${r.w.id}" data-i="${r.i}" data-k="${k}">Edit</button><button class="btn sm danger" data-act="del" data-id="${r.w.id}">Delete</button>`);
   const editDel = w => (S.preview ? '' : `<button class="btn sm" data-act="edit" data-id="${w.id}">Edit</button><button class="btn sm danger" data-act="del" data-id="${w.id}">Delete</button>`);
   return {
     mine: { label: 'My websites', sub: 'Websites you add yourself. They need no approval and nobody else can see them.', list: mineList, add: true, own: true },
@@ -345,13 +346,13 @@ function sectionDefs(allWs) {
     myexch: { label: 'Exchange links', sub: 'Links on your own exchange websites.', list: linkRows(w => w.deal_type === 'exchange'),
       cols: [['Website', siteCell], ['Link sent', r => lnk(r.x.target_url)], ['Anchor text', r => esc(r.x.anchor_text || '—')], ['Our live link', r => lnk(r.x.live_url)],
         ['Their link', r => `${lnk(r.x.their_link)}${r.cur && r.w.their_link_live ? ' (live)' : ''}`], ['Status', r => (r.cur ? pill(r.w) : '<span class="pill green">Done</span>')], ['DR / Traffic', drCell]],
-      rowAct: r => (r.cur && r.w.status === 'live' && !r.w.their_link_live ? B('theirlive', r.w.id, 'Their link is live', true) : '') + editDel(r.w) },
+      rowAct: r => (r.cur && r.w.status === 'live' && !r.w.their_link_live ? B('theirlive', r.w.id, 'Their link is live', true) : '') + editLink(r, 'exch') },
     mynext: { label: 'Next link possible', sub: 'Your own finished websites. Add the next link.', list: mineList.filter(nextPossible),
       cols: [['Website', siteCell], ['Links placed', r => `${linkNo(r.w)}`], ['DR / Traffic', drCell]], rowAct: r => ownActions(r.w) + editDel(r.w), wrap: true },
     myinv: { label: 'Invoices and payments', sub: 'Invoices for your own paid websites.', list: linkRows(w => w.deal_type === 'paid'),
       cols: [['Website', siteCell], ['Link sent', r => lnk(r.x.target_url)], ['Invoice', r => (r.x.invoice_url ? lnk(r.x.invoice_url) : 'No invoice link yet')], ['Amount', r => money(r.x.price)],
         ['Status', r => (r.cur ? pill(r.w) : '<span class="pill green">Paid</span>')], ['DR / Traffic', drCell]],
-      rowAct: r => (r.cur && ['live', 'invoice_received'].includes(r.w.status) ? invBtns(r.w) : '') + editDel(r.w) },
+      rowAct: r => (r.cur && ['live', 'invoice_received'].includes(r.w.status) ? invBtns(r.w) : '') + editLink(r, 'inv') },
     needs: { label: 'Needs a link (Approved)', sub: 'Approved websites that are waiting for a target URL and anchor.', list: ws.filter(w => w.status === 'approved'),
       extra: [['Possible links', w => w.possible_links ?? '?']], act: w => act(`${B('addlink', w.id, 'Add link', true)}<button class="btn" data-act="bossedit" data-id="${w.id}">Edit</button><button class="btn danger" data-act="reject" data-id="${w.id}">Reject</button>`) },
     inv: { label: 'Invoices and payments', sub: 'Paid deals that are live.', list: ws.filter(w => w.deal_type === 'paid' && ['live', 'invoice_received'].includes(w.status)),
@@ -521,7 +522,7 @@ function render() {
 }
 
 // ---------- actions ----------
-const WRITE = new Set(['approve', 'approvelink', 'reject', 'addlink', 'invoice', 'paid', 'theirlive', 'nextlink', 'add', 'edit', 'del', 'sentbtn', 'livebtn', 'import', 'rminvite', 'bossedit', 'restore', 'purge']);
+const WRITE = new Set(['approve', 'approvelink', 'reject', 'addlink', 'invoice', 'paid', 'theirlive', 'nextlink', 'add', 'edit', 'del', 'sentbtn', 'livebtn', 'import', 'rminvite', 'bossedit', 'restore', 'purge', 'editlink']);
 const need = (id, msg, fields, form, title) => openDrawer(title, `<form data-form="${form}" data-id="${id}">${fields}<div style="margin-top:14px"><button class="btn primary big" type="submit">${msg}</button></div></form>`, 'form', id);
 const site = id => S.sites.find(w => w.id === id);
 const pairHtml = () => `<div class="pair"><label>Another link: Target URL</label><input name="more_target" placeholder="https://client-site.com/page"><label>Another link: Anchor text</label><input name="more_anchor"></div>`;
@@ -539,6 +540,14 @@ function moreLinks(d) {
 }
 
 const actions = {
+  editlink: el => {
+    const w = site(el.dataset.id), i = +el.dataset.i, k = el.dataset.k, x = i >= 0 ? hist(w)[i] : w;
+    if (!x) return;
+    const inp = (name, label, v, ph) => `<label>${label}</label><input name="${name}" value="${esc(v || '')}" ${ph ? `placeholder="${ph}"` : ''}>`;
+    const fields = inp('target_url', 'Link sent', x.target_url, 'https://client-site.com/page') +
+      (k === 'exch' ? inp('anchor_text', 'Anchor text', x.anchor_text) + inp('live_url', 'Our live link', x.live_url, 'https://') + inp('their_link', 'Their link', x.their_link, 'https://') : inp('invoice_url', 'Invoice', x.invoice_url, 'Link or PDF URL'));
+    openDrawer('Edit link ' + (i >= 0 ? i + 1 : hist(w).length + 1) + ' of ' + w.domain, `<form data-form="editlink" data-id="${w.id}" data-i="${i}" data-k="${k}">${fields}<div style="margin-top:14px"><button class="btn primary big" type="submit">Save changes</button></div></form>`, 'form', w.id);
+  },
   morelink: () => { const c = $('#morelinks'); if (c) c.insertAdjacentHTML('beforeend', pairHtml()); },
   mode: el => { S.mode = el.dataset.v; showLogin(); },
   showpw: el => { const i = el.previousElementSibling; i.type = i.type === 'password' ? 'text' : 'password'; el.textContent = i.type === 'password' ? 'Show' : 'Hide'; },
@@ -719,6 +728,14 @@ const forms = {
     const queue = queueOf(w).slice(1).concat(more);
     if (queueOf(w).length || more.length) await sb.from('websites').update({ queued_links: queue, possible_links: Math.max(w.possible_links || 1, linkNo(w) + 1 + queue.length) }).eq('id', f.dataset.id);
     toast('Status: Link Ready'); closeDrawer(); refreshSoon();
+  },
+  async editlink(f, d) {
+    const w = site(f.dataset.id), i = +f.dataset.i, k = f.dataset.k;
+    const keys = k === 'exch' ? ['target_url', 'anchor_text', 'live_url', 'their_link'] : ['target_url', 'invoice_url'];
+    const vals = Object.fromEntries(keys.map(n => [n, txt(d.get(n))]));
+    if (i < 0) return upd(w.id, vals, 'Saved');
+    const history = hist(w).map((x, n) => (n === i ? { ...x, ...vals } : x));
+    return upd(w.id, { link_history: history }, 'Saved');
   },
   async rolepw(f, d) {
     const pr = S.pendingRole;
