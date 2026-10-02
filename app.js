@@ -87,7 +87,7 @@ async function loadData() {
   const w = res.shift();
   if (w.error) return toast(errMsg(w.error), 'err');
   S.sites = w.data.filter(x => !x.deleted_at);
-  S.trash = w.data.filter(x => !x.deleted_at ? false : x.member_id === S.profile.id);
+  S.trash = S.profile.role === 'boss' ? w.data.filter(x => x.deleted_at) : [];
   if (role !== 'boss') { const s = res.shift(); if (s.data) S.teamRate = +s.data.team_rate; }
   if (role !== 'member') S.people = res.shift().data || [];
   if (role === 'manager') {
@@ -376,7 +376,13 @@ function sectionDefs(allWs) {
     rejected: { label: 'Rejected', sub: 'Websites you have rejected.', list: ws.filter(w => w.status === 'rejected'), extra: [['Reason', w => esc(w.reject_reason || '—')], ['Updated', w => (w.updated_at || '').slice(0, 10)]] },
     trash: { label: 'Trash', sub: 'Websites you deleted. Restore them, or delete them forever.', list: S.trash, extra: [['Deleted', w => (w.deleted_at || '').slice(0, 10)]],
       act: w => act(`<button class="btn" data-act="restore" data-id="${w.id}">Restore</button><button class="btn sm danger" data-act="purge" data-id="${w.id}">Delete forever</button>`) },
-    all: { label: 'All websites', sub: '', list: ws.filter(w => !S.bossQ.trim() || w.domain.includes(S.bossQ.trim().toLowerCase())), search: true },
+    all: { label: 'All websites', sub: '', list: ws.filter(w => !S.bossQ.trim() || w.domain.includes(S.bossQ.trim().toLowerCase())), search: true,
+      act: w => act(S.preview ? '' : `<button class="btn sm danger" data-act="del" data-id="${w.id}">Delete</button>`) },
+    team: { label: 'Team managing', sub: 'Your team members and how their websites are doing.', list: S.people.filter(p => p.role === 'member'),
+      cols: [['Name', r => `<b>${esc(r.w.name || '—')}</b>`], ['Email', r => esc(r.w.email)],
+        ['Websites', r => allWs.filter(x => x.member_id === r.w.id).length], ['Under review', r => allWs.filter(x => x.member_id === r.w.id && x.status === 'boss_review').length],
+        ['Live links', r => allWs.filter(x => x.member_id === r.w.id).reduce((n, x) => n + hist(x).length + (LIVE_STATUSES.includes(x.status) ? 1 : 0), 0)],
+        ['Rejected', r => allWs.filter(x => x.member_id === r.w.id && x.status === 'rejected').length]], wrap: true },
   };
 }
 
@@ -396,11 +402,20 @@ function mineHeader(list) {
 function sectionView(key) {
   const d = sectionDefs(visibleSites())[key];
   const all = d.list;
+  if (key === 'trash') {
+    S.sel = new Set([...(S.sel || [])].filter(id => d.list.some(w => w.id === id)));
+    const n = S.sel.size, allOn = d.list.length && n === d.list.length;
+    return `<h2>${d.label} <span class="badge">${d.list.length}</span></h2><p class="sub">${d.sub}</p>
+      ${n ? `<div class="toolbar"><span class="hint">${n} selected</span><button class="btn" data-act="bulkrestore">Restore selected</button><button class="btn danger" data-act="bulkpurge">Delete selected forever</button></div>` : ''}
+      ${d.list.length ? `<div class="tablewrap"><table><thead><tr><th><input type="checkbox" data-act="selall" ${allOn ? 'checked' : ''} aria-label="Select all"></th><th>Website</th><th>Name</th><th>Deal</th><th class="num">Price</th><th>DR / Traffic</th><th>Status</th><th>Deleted</th><th>Action</th></tr></thead><tbody>
+      ${d.list.map(w => `<tr><td><input type="checkbox" data-act="seltoggle" data-id="${w.id}" ${S.sel.has(w.id) ? 'checked' : ''} aria-label="Select"></td><td><b>${esc(w.domain)}</b></td><td>${esc(memberName(w.member_id))}</td><td>${dealLabel(w.deal_type)}</td>
+      <td class="num">${money(w.price)}</td><td>${w.da ?? '—'} / ${w.traffic ?? '—'}</td><td>${pill(w)}</td><td>${(w.deleted_at || '').slice(0, 10)}</td><td class="nowrap">${d.act(w)}</td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">Trash is empty.</div>'}`;
+  }
   if (d.cols) {
     const rows = d.wrap ? d.list.map(w => ({ w, x: w, cur: true })) : d.list;
     return `<h2>${d.label} <span class="badge">${rows.length}</span></h2><p class="sub">${d.sub}</p>
-      ${rows.length ? `<div class="tablewrap"><table><thead><tr>${d.cols.map(([l]) => `<th>${l}</th>`).join('')}<th>Action</th></tr></thead><tbody>
-      ${rows.map(r => `<tr ${d.kind ? `data-act="linkdetail" data-id="${r.w.id}" data-i="${r.i ?? -1}" data-k="${d.kind}"` : ''}>${d.cols.map(([, fn]) => `<td>${fn(r)}</td>`).join('')}<td class="nowrap">${d.rowAct(r)}</td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">Nothing here right now.</div>'}`;
+      ${rows.length ? `<div class="tablewrap"><table><thead><tr>${d.cols.map(([l]) => `<th>${l}</th>`).join('')}${d.rowAct ? '<th>Action</th>' : ''}</tr></thead><tbody>
+      ${rows.map(r => `<tr ${d.kind ? `data-act="linkdetail" data-id="${r.w.id}" data-i="${r.i ?? -1}" data-k="${d.kind}"` : ''}>${d.cols.map(([, fn]) => `<td>${fn(r)}</td>`).join('')}${d.rowAct ? `<td class="nowrap">${d.rowAct(r)}</td>` : ''}</tr>`).join('')}</tbody></table></div>` : '<div class="empty">Nothing here right now.</div>'}`;
   }
   const extra = d.extra || [['Updated', w => (w.updated_at || '').slice(0, 10)]];
   const hasAct = d.own || d.act;
@@ -415,6 +430,7 @@ function sectionView(key) {
 }
 
 const ICONS = {
+  team: '<circle cx="9" cy="8" r="3.5"/><path d="M2 20c0-3.500 3-6 7-6s7 2.500 7 6M16 4.500a3.500 3.500 0 0 1 0 7M18 14.500c2.500.5 4 2.500 4 5.500"/>',
   wlinks: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/>',
   trash: '<path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 10v7M14 10v7"/>',
   mine: '<circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-7 8-7s8 3 8 7"/>',
@@ -445,7 +461,7 @@ function sidebar() {
       kids(S.mineOpen, [['mylinks', 'Website links', d.mylinks.list.length, 'wlinks'], ['myexch', 'Exchange links', d.myexch.list.length, 'exch'], ['mynext', 'Next link possible', d.mynext.list.length, 'next'], ['myinv', 'Invoices & payments', d.myinv.list.length, 'inv']]) +
       row(['home', 'Review', ws.filter(w => w.status === 'boss_review').length, 'review']).replace(/<\/button>$/, chev(S.revOpen, 'revtoggle')) +
       kids(S.revOpen, [['needs', 'Needs a link', d.needs.list.length, 'needs'], ['rlinks', 'Website links' + (ws.some(w => w.change_request) ? ' <span class="dot"></span>' : ''), d.rlinks.list.length, 'wlinks'], ['exch', 'Exchange links', d.exch.list.length, 'exch'], ['next', 'Next link possible', d.next.list.length, 'next']]) +
-      row(['inv', 'Invoices & payments', d.inv.list.length, 'inv']) + row(['rejected', 'Rejected', d.rejected.list.length, 'rejected']) + row(['all', 'All websites', d.all.list.length, 'all']) +
+      row(['inv', 'Invoices & payments', d.inv.list.length, 'inv']) + row(['rejected', 'Rejected', d.rejected.list.length, 'rejected']) + row(['all', 'All websites', d.all.list.length, 'all']) + row(['team', 'Team managing', d.team.list.length, 'team']) +
       row(['trash', 'Trash', d.trash.list.length, 'trash']).replace('class="nav ', 'class="nav trashbtn ');
   } else if (role === 'manager') {
     items = [['home', 'Websites', 'all'], ['commission', 'Commission', 'commission'], ['settings', 'Settings', 'settings']].map(([k, l, ic]) => btn(k, l, null, S.nav === k, 'nav', ic)).join('');
@@ -534,7 +550,7 @@ function render() {
 }
 
 // ---------- actions ----------
-const WRITE = new Set(['approve', 'approvelink', 'reject', 'addlink', 'invoice', 'paid', 'theirlive', 'nextlink', 'add', 'edit', 'del', 'sentbtn', 'livebtn', 'import', 'rminvite', 'bossedit', 'restore', 'purge', 'editlink', 'reqchange', 'clearreq']);
+const WRITE = new Set(['approve', 'approvelink', 'reject', 'addlink', 'invoice', 'paid', 'theirlive', 'nextlink', 'add', 'edit', 'del', 'sentbtn', 'livebtn', 'import', 'rminvite', 'bossedit', 'restore', 'purge', 'editlink', 'reqchange', 'clearreq', 'bulkrestore', 'bulkpurge']);
 const need = (id, msg, fields, form, title) => openDrawer(title, `<form data-form="${form}" data-id="${id}">${fields}<div style="margin-top:14px"><button class="btn primary big" type="submit">${msg}</button></div></form>`, 'form', id);
 const site = id => S.sites.find(w => w.id === id);
 const pairHtml = () => `<div class="pair"><label>Another link: Target URL</label><input name="more_target" placeholder="https://client-site.com/page"><label>Another link: Anchor text</label><input name="more_anchor"></div>`;
@@ -552,6 +568,26 @@ function moreLinks(d) {
 }
 
 const actions = {
+  seltoggle: el => { S.sel = S.sel || new Set(); S.sel.has(el.dataset.id) ? S.sel.delete(el.dataset.id) : S.sel.add(el.dataset.id); render(); },
+  selall: () => { const ids = S.trash.map(w => w.id); S.sel = (S.sel && S.sel.size === ids.length) ? new Set() : new Set(ids); render(); },
+  async bulkrestore() {
+    const ids = [...S.sel];
+    const { error } = await sb.from('websites').update({ deleted_at: null }).in('id', ids);
+    if (error) return toast(errMsg(error), 'err');
+    S.sel = new Set(); toast('Restored'); refreshSoon();
+  },
+  async bulkpurge(el) {
+    if (armed !== 'bulk') {
+      armed = 'bulk'; el.textContent = `Confirm (${S.sel.size})`; el.classList.add('armed');
+      setTimeout(() => { if (armed === 'bulk') { armed = null; if (el.isConnected) { el.textContent = 'Delete selected forever'; el.classList.remove('armed'); } } }, 4000);
+      return;
+    }
+    armed = null;
+    const ids = [...S.sel];
+    const { error } = await sb.from('websites').delete().in('id', ids);
+    if (error) return toast(errMsg(error), 'err');
+    S.sel = new Set(); toast('Deleted forever'); refreshSoon();
+  },
   reqchange: el => {
     const w = site(el.dataset.id);
     openDrawer('Request a change', `<form data-form="changereq" data-id="${w.id}"><p class="hint">Tell the Director what the website wants changed (anchor text, URL, or anything else). The link stays as sent until the Director updates it.</p>
@@ -601,13 +637,13 @@ const actions = {
   del: async el => {
     const id = el.dataset.id;
     if (armed !== id) {
-      armed = id; el.textContent = 'Really delete?'; el.classList.add('armed');
+      armed = id; el.textContent = 'Confirm'; el.classList.add('armed');
       setTimeout(() => { if (armed === id) { armed = null; if (el.isConnected) { el.textContent = 'Delete'; el.classList.remove('armed'); } } }, 4000);
       return;
     }
     armed = null;
     const w = site(id);
-    const soft = S.profile.role === 'boss' && w && w.member_id === S.profile.id;
+    const soft = S.profile.role === 'boss';
     const { error } = soft ? await sb.from('websites').update({ deleted_at: new Date().toISOString() }).eq('id', id) : await sb.from('websites').delete().eq('id', id);
     if (error) return toast(errMsg(error), 'err');
     toast(soft ? 'Moved to Trash' : 'Deleted'); closeDrawer(); refreshSoon();
@@ -620,7 +656,7 @@ const actions = {
   async purge(el) {
     const id = el.dataset.id;
     if (armed !== id) {
-      armed = id; el.textContent = 'Really delete?'; el.classList.add('armed');
+      armed = id; el.textContent = 'Confirm'; el.classList.add('armed');
       setTimeout(() => { if (armed === id) { armed = null; if (el.isConnected) { el.textContent = 'Delete forever'; el.classList.remove('armed'); } } }, 4000);
       return;
     }
