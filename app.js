@@ -346,7 +346,8 @@ function sectionDefs(allWs) {
     const who2 = mine ? 'your own' : 'team';
     return {
       links: { label: 'Website links', sub: `Links sent to ${who2} websites.`, list: rows(() => true, !mine),
-        cols: [...site1, ['Target URL', r => lnk(r.x.target_url)], ['Anchor text', r => esc(r.x.anchor_text || '—')], ['Status', r => (r.cur ? pill(r.w) : '<span class="pill green">Done</span>')], ['DR / Traffic', drCell]], kind: 'links', rowAct: r => editLink(r, 'links') },
+        cols: [...site1, ['Target URL', r => lnk(r.x.target_url)], ['Anchor text', r => esc(r.x.anchor_text || '—')], ['Status', r => (r.cur ? pill(r.w) : '<span class="pill green">Done</span>')], ...(mine ? [] : [['Request', r => (r.cur && r.w.change_request ? `<span class="pill amber">Change requested</span><div class="mini">${esc(r.w.change_request)}</div>` : '—')]]), ['DR / Traffic', drCell]], kind: 'links',
+        rowAct: r => (r.cur && r.w.change_request && !S.preview ? `<button class="btn primary" data-act="clearreq" data-id="${r.w.id}">Done</button>` : '') + editLink(r, 'links') },
       exch: { label: 'Exchange links', sub: `Links on ${who2} exchange websites.`, list: rows(w => w.deal_type === 'exchange'),
         cols: [...site1, ['Target URL', r => lnk(r.x.target_url)], ['Anchor text', r => esc(r.x.anchor_text || '—')], ['Our live link', r => lnk(r.x.live_url)],
           ['Their link', r => `${lnk(r.x.their_link)}${r.cur && r.w.their_link_live ? ' (live)' : ''}`], ['Status', r => (r.cur ? pill(r.w) : '<span class="pill green">Done</span>')], ['DR / Traffic', drCell]], kind: 'exch',
@@ -442,7 +443,7 @@ function sidebar() {
     items = row(['mine', 'My websites', d.mine.list.length, 'mine']).replace(/<\/button>$/, chev(S.mineOpen, 'minetoggle')) +
       kids(S.mineOpen, [['mylinks', 'Website links', d.mylinks.list.length, 'needs'], ['myexch', 'Exchange links', d.myexch.list.length, 'exch'], ['mynext', 'Next link possible', d.mynext.list.length, 'next'], ['myinv', 'Invoices & payments', d.myinv.list.length, 'inv']]) +
       row(['home', 'Review', ws.filter(w => w.status === 'boss_review').length, 'review']).replace(/<\/button>$/, chev(S.revOpen, 'revtoggle')) +
-      kids(S.revOpen, [['needs', 'Needs a link', d.needs.list.length, 'needs'], ['rlinks', 'Website links', d.rlinks.list.length, 'needs'], ['exch', 'Exchange links', d.exch.list.length, 'exch'], ['next', 'Next link possible', d.next.list.length, 'next']]) +
+      kids(S.revOpen, [['needs', 'Needs a link', d.needs.list.length, 'needs'], ['rlinks', 'Website links' + (ws.some(w => w.change_request) ? ' <span class="dot"></span>' : ''), d.rlinks.list.length, 'needs'], ['exch', 'Exchange links', d.exch.list.length, 'exch'], ['next', 'Next link possible', d.next.list.length, 'next']]) +
       row(['inv', 'Invoices & payments', d.inv.list.length, 'inv']) + row(['rejected', 'Rejected', d.rejected.list.length, 'rejected']) + row(['all', 'All websites', d.all.list.length, 'all']) +
       row(['trash', 'Trash', d.trash.list.length, 'trash']).replace('class="nav ', 'class="nav trashbtn ');
   } else if (role === 'manager') {
@@ -494,9 +495,9 @@ function memberRow(w) {
   const more = queueOf(w).length ? ` ${queueOf(w).length} more link(s) will follow.` : '';
   const showLink = ['link_ready', 'sent'].includes(w.status);
   const step = w.status === 'link_ready' ? `<button class="btn" data-act="copymsg" data-id="${w.id}">Copy message</button><button class="btn primary" data-act="sentbtn" data-id="${w.id}">Link sent</button>`
-    : w.status === 'sent' ? `<button class="btn primary" data-act="livebtn" data-id="${w.id}">Link is live</button>` : '';
+    : w.status === 'sent' ? `<button class="btn primary" data-act="livebtn" data-id="${w.id}">Link is live</button><button class="btn" data-act="reqchange" data-id="${w.id}">${w.change_request ? 'Edit request' : 'Request change'}</button>` : '';
   return `<tr><td><b>${esc(w.domain)}</b></td><td>${dealLabel(w.deal_type)}</td><td class="num">${money(w.price)}</td><td>${w.da ?? '—'} / ${w.traffic ?? '—'}</td>
-    <td>${pill(w)}</td><td>${showLink ? lnk(w.target_url) : '—'}</td><td>${showLink ? esc(w.anchor_text || '—') : '—'}</td><td>${esc(t + more)}</td>
+    <td>${pill(w)}</td><td>${showLink ? lnk(w.target_url) : '—'}</td><td>${showLink ? esc(w.anchor_text || '—') : '—'}</td><td>${esc(t + more)}${w.change_request ? `<div class="mini hint2">Change requested: ${esc(w.change_request)}</div>` : ''}</td>
     <td class="nowrap">${step}<button class="btn sm" data-act="edit" data-id="${w.id}">Edit</button><button class="btn sm danger" data-act="del" data-id="${w.id}">Delete</button></td></tr>`;
 }
 
@@ -532,7 +533,7 @@ function render() {
 }
 
 // ---------- actions ----------
-const WRITE = new Set(['approve', 'approvelink', 'reject', 'addlink', 'invoice', 'paid', 'theirlive', 'nextlink', 'add', 'edit', 'del', 'sentbtn', 'livebtn', 'import', 'rminvite', 'bossedit', 'restore', 'purge', 'editlink']);
+const WRITE = new Set(['approve', 'approvelink', 'reject', 'addlink', 'invoice', 'paid', 'theirlive', 'nextlink', 'add', 'edit', 'del', 'sentbtn', 'livebtn', 'import', 'rminvite', 'bossedit', 'restore', 'purge', 'editlink', 'reqchange', 'clearreq']);
 const need = (id, msg, fields, form, title) => openDrawer(title, `<form data-form="${form}" data-id="${id}">${fields}<div style="margin-top:14px"><button class="btn primary big" type="submit">${msg}</button></div></form>`, 'form', id);
 const site = id => S.sites.find(w => w.id === id);
 const pairHtml = () => `<div class="pair"><label>Another link: Target URL</label><input name="more_target" placeholder="https://client-site.com/page"><label>Another link: Anchor text</label><input name="more_anchor"></div>`;
@@ -550,6 +551,13 @@ function moreLinks(d) {
 }
 
 const actions = {
+  reqchange: el => {
+    const w = site(el.dataset.id);
+    openDrawer('Request a change', `<form data-form="changereq" data-id="${w.id}"><p class="hint">Tell the Director what the website wants changed (anchor text, URL, or anything else). The link stays as sent until the Director updates it.</p>
+      <label>What should change?</label><textarea name="note" rows="4" required maxlength="500">${esc(w.change_request || '')}</textarea>
+      <div style="margin-top:14px"><button class="btn primary big" type="submit">Send to Director</button></div>${w.change_request ? `<div style="margin-top:10px"><button type="button" class="btn danger" data-act="clearreq" data-id="${w.id}">Cancel my request</button></div>` : ''}</form>`, 'form', w.id);
+  },
+  clearreq: el => upd(el.dataset.id, { change_request: null }, 'Request cleared'),
   linkdetail: el => {
     const w = site(el.dataset.id), i = +el.dataset.i, k = el.dataset.k, x = i >= 0 ? hist(w)[i] : w;
     if (!x) return;
@@ -756,6 +764,7 @@ const forms = {
     const history = hist(w).map((x, n) => (n === i ? { ...x, ...vals } : x));
     return upd(w.id, { link_history: history }, 'Saved');
   },
+  changereq: (f, d) => upd(f.dataset.id, { change_request: txt(d.get('note')) }, 'Request sent to the Director'),
   async rolepw(f, d) {
     const pr = S.pendingRole;
     if (!pr) return closeDrawer();

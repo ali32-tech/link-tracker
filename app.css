@@ -221,3 +221,5 @@ main .tablewrap{margin-top:4px}
 
 .mini{font-size:12px;font-weight:400;color:var(--muted);margin-top:2px}.mini.queued{color:var(--accent)}
 .mini.hint2{color:#B45309;font-weight:600}
+
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#EF4444;margin-left:4px;vertical-align:middle}

@@ -45,6 +45,7 @@ create table public.websites (
   notes text,
   deleted_at timestamptz,
   queued_links jsonb not null default '[]'::jsonb,
+  change_request text,
   status text not null default 'boss_review' check (status in
     ('boss_review','approved','rejected','link_ready','sent','live','invoice_received','paid')),
   possible_links int,
@@ -124,7 +125,7 @@ begin
     new.reject_reason := null; new.live_url := null; new.their_link := null;
     new.their_link_live := false; new.invoice_url := null;
     new.live_date := null; new.paid_date := null; new.link_history := '[]'::jsonb;
-    new.deleted_at := null; new.queued_links := '[]'::jsonb;
+    new.deleted_at := null; new.queued_links := '[]'::jsonb; new.change_request := null;
     new.created_at := now(); new.updated_at := now();
     return new;
   end if;
@@ -272,7 +273,7 @@ begin
       'paid_date', w.paid_date, 'price', w.price)),
     target_url = trim(p_target), anchor_text = trim(p_anchor),
     price = case when w.deal_type = 'paid' and p_price is not null then p_price else w.price end,
-    live_url = null, their_link = null, their_link_live = false, invoice_url = null,
+    live_url = null, their_link = null, their_link_live = false, invoice_url = null, change_request = null,
     live_date = null, paid_date = null, status = 'link_ready'
   where id = p_id;
 end $$;
