@@ -41,7 +41,7 @@ const liveCount = (w, ym) =>
 const errMsg = e => (e && e.code === '23505' ? 'This website is already in the tracker.' : (e && e.message) || 'Something went wrong');
 
 const S = {
-  session: null, revOpen: false, mineOpen: true, profile: null, sites: [], trash: [], people: [], invites: [], teamRate: 7, bossRate: 10,
+  session: null, revOpen: false, mineOpen: true, mwOpen: true, profile: null, sites: [], trash: [], people: [], invites: [], teamRate: 7, bossRate: 10,
   nav: 'home', mf: { status: '', member: '', deal: '', q: '' }, mem: { f: 'all', q: '' }, bossQ: '',
   month: ymNow(), preview: null, drawer: null, chan: null,
 };
@@ -491,8 +491,9 @@ function sidebar() {
     items = [['home', 'Websites', 'all'], ['commission', 'Commission', 'commission'], ['settings', 'Settings', 'settings']].map(([k, l, ic]) => btn(k, l, null, S.nav === k, 'nav', ic)).join('');
   } else {
     const cnt = { all: w => !LIVE_STATUSES.includes(w.status), action: needsAction, boss: w => ['boss_review', 'approved'].includes(w.status), live: w => LIVE_STATUSES.includes(w.status), rejected: w => w.status === 'rejected' };
-    const mf = (k, l, ic) => btn(k, l, ws.filter(cnt[k]).length, S.mem.f === k && S.nav === 'home', 'mfilter', ic);
-    items = mf('all', 'My Websites', 'mine') + mf('action', 'Action needed', 'action') + mf('boss', 'Under review', 'review') + mf('live', 'Live sites', 'site') + btn('earn', 'Live links', null, S.nav === 'earn', 'nav', 'needs') + btn('minv', 'Invoices', null, S.nav === 'minv', 'nav', 'inv') + mf('rejected', 'Rejected', 'rejected') + btn('trash', 'Trash', S.trash.length, S.nav === 'trash', 'nav', 'trash').replace('class="nav ', 'class="nav trashbtn ');
+    const mf = (k, l, ic, sub) => btn(k, l, ws.filter(cnt[k]).length, S.mem.f === k && S.nav === 'home', 'mfilter', ic).replace('class="nav ', `class="nav ${sub ? 'sub ' : ''}`);
+    const arrow = `<span class="chev ${S.mwOpen ? 'open' : ''}" data-act="mwtoggle" role="button" aria-label="Show or hide sections"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span></button>`;
+    items = mf('all', 'My Websites', 'mine').replace(/<\/button>$/, arrow) + (S.mwOpen ? mf('action', 'Action needed', 'action', true) + mf('boss', 'Under review', 'review', true) + mf('live', 'Live sites', 'site', true) : '') + btn('earn', 'Live links', null, S.nav === 'earn', 'nav', 'needs') + btn('minv', 'Invoices', null, S.nav === 'minv', 'nav', 'inv') + mf('rejected', 'Rejected', 'rejected') + btn('trash', 'Trash', S.trash.length, S.nav === 'trash', 'nav', 'trash').replace('class="nav ', 'class="nav trashbtn ');
   }
   return `<nav class="side" aria-label="Sections">${items}</nav>`;
 }
@@ -539,7 +540,9 @@ function memberView() {
     live: w => LIVE_STATUSES.includes(w.status), rejected: w => w.status === 'rejected',
   }[f];
   const list = ws.filter(w => filt(w) && (!q || w.domain.includes(q)));
-  return `${f === 'all' ? `<div class="toolbar"><button class="btn primary" data-act="add" ${readOnly() ? 'disabled' : ''}>+ Add website</button>
+  const title = { all: 'My Websites', action: 'Action needed', boss: 'Under review', live: 'Live sites', rejected: 'Rejected' }[f];
+  return `<h2>${title} <span class="badge">${list.length}</span></h2>
+    ${f === 'all' ? `<div class="toolbar"><button class="btn primary" data-act="add" ${readOnly() ? 'disabled' : ''}>+ Add website</button>
       <input type="search" id="memq" placeholder="Search" value="${esc(S.mem.q)}" data-input="memq"></div>` : ''}
     ${list.length ? `<div class="tablewrap"><table><thead><tr><th>Website</th><th>Deal</th><th class="num">Price</th><th>DR / Traffic</th><th>Status</th><th>Note</th><th>Action</th></tr></thead><tbody>${list.map(memberRow).join('')}</tbody></table></div>` :
       `<div class="empty">${ws.length ? 'No websites in this view.' : 'No websites yet. Click + Add website when a site says yes.'}</div>`}`;
@@ -661,12 +664,13 @@ const actions = {
   showpw: el => { const i = el.previousElementSibling; i.type = i.type === 'password' ? 'text' : 'password'; el.textContent = i.type === 'password' ? 'Show' : 'Hide'; },
   logout: async () => { if (S.chan) sb.removeChannel(S.chan); await sb.auth.signOut(); },
   close: closeDrawer,
-  nav: el => { S.nav = el.dataset.v; S.revOpen = ['home', 'needs', 'rlinks', 'exch', 'next'].includes(S.nav); S.mineOpen = ['mine', 'mylinks', 'myexch', 'mynext', 'myinv'].includes(S.nav); render(); window.scrollTo(0, 0); },
+  nav: el => { S.nav = el.dataset.v; S.revOpen = ['home', 'needs', 'rlinks', 'exch', 'next'].includes(S.nav); S.mineOpen = ['mine', 'mylinks', 'myexch', 'mynext', 'myinv'].includes(S.nav); if (S.profile.role === 'member') S.mwOpen = false; render(); window.scrollTo(0, 0); },
   revtoggle: () => { S.revOpen = !S.revOpen; render(); },
   minetoggle: () => { S.mineOpen = !S.mineOpen; render(); },
   pipe: el => { S.mf.status = S.mf.status === el.dataset.v ? '' : el.dataset.v; render(); },
   clearf: () => { S.mf = { status: '', member: '', deal: '', q: '' }; render(); },
-  mfilter: el => { S.mem.f = el.dataset.v; S.nav = 'home'; render(); },
+  mfilter: el => { S.mem.f = el.dataset.v; S.nav = 'home'; S.mwOpen = ['all', 'action', 'boss', 'live'].includes(S.mem.f); render(); },
+  mwtoggle: () => { S.mwOpen = !S.mwOpen; render(); },
   exitpreview: () => { S.preview = null; render(); },
   open: el => openDetail(el.dataset.id),
   whatsapp: () => copy(whatsappText()),
