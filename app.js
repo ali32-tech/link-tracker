@@ -425,7 +425,7 @@ function sectionView(key) {
   if (key === 'trash') {
     S.sel = new Set([...(S.sel || [])].filter(id => d.list.some(w => w.id === id)));
     const n = S.sel.size, allOn = d.list.length && n === d.list.length;
-    return `<h2>${d.label} <span class="badge">${d.list.length}</span></h2><p class="sub">${d.sub}</p>
+    return `<h2>${d.label} <span class="badge">${d.list.length}</span></h2>
       ${n ? `<div class="toolbar"><span class="hint">${n} selected</span><button class="btn" data-act="bulkrestore">Restore selected</button><button class="btn danger" data-act="bulkpurge">Delete selected forever</button></div>` : ''}
       ${d.list.length ? `<div class="tablewrap"><table><thead><tr><th><input type="checkbox" data-act="selall" ${allOn ? 'checked' : ''} aria-label="Select all"></th><th>Website</th><th>Name</th><th>Deal</th><th class="num">Price</th><th>DR / Traffic</th><th>Status</th><th>Deleted</th><th>Action</th></tr></thead><tbody>
       ${d.list.map(w => `<tr><td><input type="checkbox" data-act="seltoggle" data-id="${w.id}" ${S.sel.has(w.id) ? 'checked' : ''} aria-label="Select"></td><td><b>${esc(w.domain)}</b></td><td>${esc(memberName(w.member_id))}</td><td>${dealLabel(w.deal_type)}</td>
@@ -433,7 +433,7 @@ function sectionView(key) {
   }
   if (d.cols) {
     const rows = d.wrap ? d.list.map(w => ({ w, x: w, cur: true })) : d.list;
-    return `<h2>${d.label} <span class="badge">${rows.length}</span></h2><p class="sub">${d.sub}</p>
+    return `<h2>${d.label} <span class="badge">${rows.length}</span></h2>
       ${d.toolbar || ''}
       ${rows.length ? `<div class="tablewrap"><table><thead><tr>${d.cols.map(([l]) => `<th>${l}</th>`).join('')}${d.rowAct ? '<th>Action</th>' : ''}</tr></thead><tbody>
       ${rows.map(r => `<tr ${d.kind ? `data-act="linkdetail" data-id="${r.w.id}" data-i="${r.i ?? -1}" data-k="${d.kind}"` : ''}>${d.cols.map(([, fn]) => `<td>${fn(r)}</td>`).join('')}${d.rowAct ? `<td class="nowrap">${d.rowAct(r)}</td>` : ''}</tr>`).join('')}</tbody>${d.foot ? `<tfoot><tr>${d.foot.map(c => `<td>${c}</td>`).join('')}</tr></tfoot>` : ''}</table></div>` : '<div class="empty">Nothing here right now.</div>'}`;
@@ -441,7 +441,7 @@ function sectionView(key) {
   const extra = d.extra || [['Updated', w => (w.updated_at || '').slice(0, 10)]];
   const hasAct = d.own || d.act;
   const actCell = w => (d.own ? `${w.status === 'approved' ? ownActions(w) : ''}${ownStep(w)}${S.preview ? '' : `<button class="btn sm" data-act="edit" data-id="${w.id}">Edit</button><button class="btn sm danger" data-act="del" data-id="${w.id}">Delete</button>`}` : d.act(w));
-  return `<h2>${d.label} <span class="badge">${all.length}</span></h2>${d.sub ? `<p class="sub">${d.sub}</p>` : ''}
+  return `<h2>${d.label} <span class="badge">${all.length}</span></h2>${d.sub ? `` : ''}
     ${d.add ? `<div class="toolbar"><button class="btn primary" data-act="add" ${readOnly() ? 'disabled' : ''}>+ Add website</button></div>` : ''}${d.own ? mineHeader(all) : ''}
     ${d.search ? `<div class="toolbar"><input type="search" id="bq" placeholder="Search website" value="${esc(S.bossQ)}" data-input="bq"></div>` : ''}
     ${!d.list.length ? '<div class="empty">Nothing here right now.</div>' : `<div class="tablewrap"><table><thead><tr><th>Website</th><th>Name</th><th>Deal</th><th class="num">Price</th><th>DR / Traffic</th><th class="num">Links</th><th>Status</th>${extra.map(([l]) => `<th>${l}</th>`).join('')}${hasAct ? '<th>Action</th>' : ''}</tr></thead><tbody>
@@ -495,7 +495,7 @@ function sidebar() {
 
 function bossView() {
   const review = visibleSites().filter(w => w.status === 'boss_review');
-  return `<h2>Review <span class="badge">${review.length}</span></h2><p class="sub">Websites waiting for your approval.</p>
+  return `<h2>Review <span class="badge">${review.length}</span></h2>
     ${review.length ? `<div class="tablewrap"><table><thead><tr><th>Website</th><th>Name</th><th>Deal</th><th class="num">Price</th><th>DR / Traffic</th><th>Action</th></tr></thead><tbody>
       ${review.map(w => `<tr data-act="open" data-id="${w.id}"><td><b>${esc(w.domain)}</b></td><td>${esc(memberName(w.member_id))}</td><td>${dealLabel(w.deal_type)}</td>
       <td class="num">${money(w.price)}</td><td>${w.da ?? '—'} / ${w.traffic ?? '—'}</td>
