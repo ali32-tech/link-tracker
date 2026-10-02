@@ -61,7 +61,7 @@ create table public.websites (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
-create unique index websites_domain_key on public.websites(domain);
+create unique index websites_domain_key on public.websites(domain) where deleted_at is null;
 create index websites_member_idx on public.websites(member_id);
 
 -- Public index used only for duplicate checks (members cannot read each other's websites)
@@ -209,16 +209,26 @@ begin
     delete from public.domains where website_id = old.id;
     return old;
   elsif tg_op = 'INSERT' then
-    insert into public.domains(domain, member_id, member_name, website_id)
-    values (new.domain, new.member_id,
-            (select coalesce(name, email) from public.profiles where id = new.member_id), new.id);
+    if new.deleted_at is null then
+      insert into public.domains(domain, member_id, member_name, website_id)
+      values (new.domain, new.member_id,
+              (select coalesce(name, email) from public.profiles where id = new.member_id), new.id);
+    end if;
   else
-    update public.domains set domain = new.domain where website_id = new.id;
+    if new.deleted_at is not null then
+      delete from public.domains where website_id = new.id;
+    elsif exists (select 1 from public.domains where website_id = new.id) then
+      update public.domains set domain = new.domain where website_id = new.id;
+    else
+      insert into public.domains(domain, member_id, member_name, website_id)
+      values (new.domain, new.member_id,
+              (select coalesce(name, email) from public.profiles where id = new.member_id), new.id);
+    end if;
   end if;
   return new;
 end $$;
 
-create trigger websites_sync_domains_trg after insert or update of domain or delete on public.websites
+create trigger websites_sync_domains_trg after insert or update of domain, deleted_at or delete on public.websites
   for each row execute function public.websites_sync_domains();
 
 -- ---------- RPCs ----------
