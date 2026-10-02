@@ -517,7 +517,14 @@ const linkLines = w => {
   if (!['boss', 'manager'].includes(eff().role)) return '';
   const cur = w.target_url ? `<div class="mini">${esc(w.anchor_text || '—')} → ${esc(short(w.target_url))}</div>` : '';
   const q = queueOf(w).map((x, i) => `<div class="mini queued">Queued ${i + 1}: ${esc(x.anchor_text)} → ${esc(short(x.target_url))}</div>`).join('');
-  return cur + q;
+  let hint = '';
+  if (queueOf(w).length) {
+    const why = nextPossible(w) ? 'Ready: open "Next link possible" and click Add next link.'
+      : ['link_ready', 'sent'].includes(w.status) ? 'Next link opens after this link is live and ' + (w.deal_type === 'paid' ? 'paid.' : 'their link is live.')
+      : w.deal_type === 'paid' ? 'Next link opens after the invoice is marked as paid.' : 'Next link opens after "Their link is live" is clicked.';
+    hint = `<div class="mini hint2">${esc(why)}</div>`;
+  }
+  return cur + q + hint;
 };
 const queueOf = w => (Array.isArray(w.queued_links) ? w.queued_links : []);
 function moreLinks(d) {
