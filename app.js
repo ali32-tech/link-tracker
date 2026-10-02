@@ -199,10 +199,13 @@ function detailHtml(w) {
   if (w.deal_type === 'exchange') rows.push(['Their link', `${lnk(w.their_link)}${w.their_link_live ? ' (live)' : ''}`]);
   else rows.push(['Invoice', lnk(w.invoice_url)]);
   rows.push(['Live date', w.live_date || '—'], ['Paid date', w.paid_date || '—'], ['Notes', esc(w.notes || '—')], ['Added', (w.created_at || '').slice(0, 10)]);
-  const h = hist(w).map((x, i) => `<div class="hist"><b>Link ${i + 1}</b> · ${esc(x.anchor_text || '')}<br>
-    Target: ${lnk(x.target_url)}<br>Live: ${lnk(x.live_url)} · ${esc(x.live_date || '')}
-    ${x.price != null ? `<br>Price: ${money(x.price)}` : ''}</div>`).join('');
-  return kvRows(rows) + (h ? `<h2 style="font-size:15px">Previous links</h2>${h}` : '');
+  const entry = (n, x, tag) => `<div class="hist"><b>Link ${n}</b> · ${esc(x.anchor_text || '')} ${tag}<br>
+    Target: ${lnk(x.target_url)}<br>Live: ${lnk(x.live_url)}${x.live_date ? ' · ' + esc(x.live_date) : ''}
+    ${x.price != null ? `<br>Price: ${money(x.price)}` : ''}</div>`;
+  const all = hist(w).map((x, i) => entry(i + 1, x, '<span class="pill green">Done</span>'));
+  if (w.target_url) all.push(entry(hist(w).length + 1, w, pill(w)));
+  const h = all.join('');
+  return kvRows(rows) + (h ? `<h2 style="font-size:15px">All links (${all.length})</h2>${h}` : '');
 }
 
 function openDrawer(title, body, kind, id) {
