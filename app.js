@@ -40,7 +40,7 @@ const liveCount = (w, ym) =>
 const errMsg = e => (e && e.code === '23505' ? 'This website is already in the tracker.' : (e && e.message) || 'Something went wrong');
 
 const S = {
-  session: null, revOpen: false, profile: null, sites: [], trash: [], people: [], invites: [], teamRate: 7, bossRate: 10,
+  session: null, revOpen: false, mineOpen: true, profile: null, sites: [], trash: [], people: [], invites: [], teamRate: 7, bossRate: 10,
   nav: 'home', mf: { status: '', member: '', deal: '', q: '' }, mem: { f: 'all', q: '' }, bossQ: '',
   month: ymNow(), preview: null, drawer: null, chan: null,
 };
@@ -333,6 +333,12 @@ function sectionDefs(allWs) {
   const act = html => (eff().role === 'boss' ? html : '');
   return {
     mine: { label: 'My websites', sub: 'Websites you add yourself. They need no approval and nobody else can see them.', list: mineList, add: true, own: true },
+    myexch: { label: 'My exchange links to place', sub: 'Your own exchange websites that are live. Place their link.', list: mineList.filter(w => w.deal_type === 'exchange' && w.status === 'live' && !w.their_link_live),
+      extra: [['Our live link', w => lnk(w.live_url)], ['Their link', w => lnk(w.their_link)]], act: w => ownActions(w) },
+    mynext: { label: 'My next links', sub: 'Your own finished websites. Add the next link.', list: mineList.filter(nextPossible),
+      extra: [['Links placed', w => `${linkNo(w)}`]], act: w => ownActions(w) },
+    myinv: { label: 'My invoices and payments', sub: 'Your own paid deals that are live.', list: mineList.filter(w => w.deal_type === 'paid' && ['live', 'invoice_received'].includes(w.status)),
+      extra: [['Our live link', w => lnk(w.live_url)], ['Invoice', w => (w.invoice_url ? lnk(w.invoice_url) : 'No invoice link yet')]], act: w => ownActions(w) },
     needs: { label: 'Needs a link (Approved)', sub: 'Approved websites that are waiting for a target URL and anchor.', list: ws.filter(w => w.status === 'approved'),
       extra: [['Possible links', w => w.possible_links ?? '?']], act: w => act(`${B('addlink', w.id, 'Add link', true)}<button class="btn" data-act="bossedit" data-id="${w.id}">Edit</button><button class="btn danger" data-act="reject" data-id="${w.id}">Reject</button>`) },
     inv: { label: 'Invoices and payments', sub: 'Paid deals that are live.', list: ws.filter(w => w.deal_type === 'paid' && ['live', 'invoice_received'].includes(w.status)),
@@ -396,10 +402,13 @@ function sidebar() {
   let items = '';
   if (role === 'boss') {
     const d = sectionDefs(ws);
-    const open = S.revOpen;
+    const chev = (open, act) => `<span class="chev ${open ? 'open' : ''}" data-act="${act}" role="button" aria-label="Show or hide sections"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span></button>`;
     const row = ([k, l, n, ic], sub) => btn(k, l, n, S.nav === k, 'nav', ic).replace('class="nav ', `class="nav ${sub ? 'sub ' : ''}`);
-    const kids = open ? [['needs', 'Needs a link', d.needs.list.length, 'needs'], ['exch', 'Exchange links', d.exch.list.length, 'exch'], ['next', 'Next link possible', d.next.list.length, 'next']].map(r => row(r, true)).join('') : '';
-    items = row(['mine', 'My websites', d.mine.list.length, 'mine']) + row(['home', 'Review', ws.filter(w => w.status === 'boss_review').length, 'review']).replace(/<\/button>$/, `<span class="chev ${open ? 'open' : ''}" data-act="revtoggle" role="button" aria-label="Show or hide sections"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span></button>`) + kids +
+    const kids = (open, list) => (open ? list.map(r => row(r, true)).join('') : '');
+    items = row(['mine', 'My websites', d.mine.list.length, 'mine']).replace(/<\/button>$/, chev(S.mineOpen, 'minetoggle')) +
+      kids(S.mineOpen, [['myexch', 'Exchange links', d.myexch.list.length, 'exch'], ['mynext', 'Next link possible', d.mynext.list.length, 'next'], ['myinv', 'Invoices & payments', d.myinv.list.length, 'inv']]) +
+      row(['home', 'Review', ws.filter(w => w.status === 'boss_review').length, 'review']).replace(/<\/button>$/, chev(S.revOpen, 'revtoggle')) +
+      kids(S.revOpen, [['needs', 'Needs a link', d.needs.list.length, 'needs'], ['exch', 'Exchange links', d.exch.list.length, 'exch'], ['next', 'Next link possible', d.next.list.length, 'next']]) +
       row(['inv', 'Invoices & payments', d.inv.list.length, 'inv']) + row(['rejected', 'Rejected', d.rejected.list.length, 'rejected']) + row(['all', 'All websites', d.all.list.length, 'all']) +
       row(['trash', 'Trash', d.trash.list.length, 'trash']).replace('class="nav ', 'class="nav trashbtn ');
   } else if (role === 'manager') {
@@ -520,8 +529,9 @@ const actions = {
   showpw: el => { const i = el.previousElementSibling; i.type = i.type === 'password' ? 'text' : 'password'; el.textContent = i.type === 'password' ? 'Show' : 'Hide'; },
   logout: async () => { if (S.chan) sb.removeChannel(S.chan); await sb.auth.signOut(); },
   close: closeDrawer,
-  nav: el => { S.nav = el.dataset.v; S.revOpen = ['home', 'needs', 'exch', 'next'].includes(S.nav); render(); window.scrollTo(0, 0); },
+  nav: el => { S.nav = el.dataset.v; S.revOpen = ['home', 'needs', 'exch', 'next'].includes(S.nav); S.mineOpen = ['mine', 'myexch', 'mynext', 'myinv'].includes(S.nav); render(); window.scrollTo(0, 0); },
   revtoggle: () => { S.revOpen = !S.revOpen; render(); },
+  minetoggle: () => { S.mineOpen = !S.mineOpen; render(); },
   pipe: el => { S.mf.status = S.mf.status === el.dataset.v ? '' : el.dataset.v; render(); },
   clearf: () => { S.mf = { status: '', member: '', deal: '', q: '' }; render(); },
   mfilter: el => { S.mem.f = el.dataset.v; render(); },
