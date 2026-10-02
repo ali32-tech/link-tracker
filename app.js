@@ -334,19 +334,19 @@ const ownActions = w => {
 function sectionDefs(allWs) {
   const mineList = allWs.filter(w => w.member_id === S.profile.id), ws = allWs.filter(w => w.member_id !== S.profile.id);
   const act = html => (eff().role === 'boss' ? html : '');
-  const linkRowsOf = (base, pred) => base.filter(pred).flatMap(w => [...hist(w).map((x, i) => ({ w, x, cur: false, i })), ...(['sent', 'live', 'invoice_received', 'paid'].includes(w.status) && w.target_url ? [{ w, x: w, cur: true, i: -1 }] : [])]);
+  const linkRowsOf = (base, pred, readyToo) => base.filter(pred).flatMap(w => [...hist(w).map((x, i) => ({ w, x, cur: false, i })), ...((readyToo ? ['link_ready', 'sent', 'live', 'invoice_received', 'paid'] : ['sent', 'live', 'invoice_received', 'paid']).includes(w.status) && w.target_url ? [{ w, x: w, cur: true, i: -1 }] : [])]);
   const siteCell = r => `<b>${esc(r.w.domain)}</b>`;
   const drCell = r => `${r.w.da ?? '—'} / ${r.w.traffic ?? '—'}`;
   const editLink = (r, k) => (S.preview ? '' : `<button class="btn sm" data-act="editlink" data-id="${r.w.id}" data-i="${r.i}" data-k="${k}">Edit</button><button class="btn sm danger" data-act="del" data-id="${r.w.id}">Delete</button>`);
   const editDel = w => (S.preview ? '' : `<button class="btn sm" data-act="edit" data-id="${w.id}">Edit</button><button class="btn sm danger" data-act="del" data-id="${w.id}">Delete</button>`);
   const mk = (base, mine) => {
-    const rows = pred => linkRowsOf(base, pred);
+    const rows = (pred, ready) => linkRowsOf(base, pred, ready);
     const who = mine ? [] : [['Name', r => esc(memberName(r.w.member_id))]];
     const site1 = [['Website', siteCell], ...who];
     const who2 = mine ? 'your own' : 'team';
     return {
-      links: { label: 'Website links', sub: `Links sent to ${who2} websites.`, list: rows(() => true),
-        cols: [...site1, ['Target URL', r => lnk(r.x.target_url)], ['Anchor text', r => esc(r.x.anchor_text || '—')], ['DR / Traffic', drCell]], kind: 'links', rowAct: r => editLink(r, 'links') },
+      links: { label: 'Website links', sub: `Links sent to ${who2} websites.`, list: rows(() => true, !mine),
+        cols: [...site1, ['Target URL', r => lnk(r.x.target_url)], ['Anchor text', r => esc(r.x.anchor_text || '—')], ['Status', r => (r.cur ? pill(r.w) : '<span class="pill green">Done</span>')], ['DR / Traffic', drCell]], kind: 'links', rowAct: r => editLink(r, 'links') },
       exch: { label: 'Exchange links', sub: `Links on ${who2} exchange websites.`, list: rows(w => w.deal_type === 'exchange'),
         cols: [...site1, ['Target URL', r => lnk(r.x.target_url)], ['Anchor text', r => esc(r.x.anchor_text || '—')], ['Our live link', r => lnk(r.x.live_url)],
           ['Their link', r => `${lnk(r.x.their_link)}${r.cur && r.w.their_link_live ? ' (live)' : ''}`], ['Status', r => (r.cur ? pill(r.w) : '<span class="pill green">Done</span>')], ['DR / Traffic', drCell]], kind: 'exch',
