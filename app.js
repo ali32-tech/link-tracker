@@ -490,9 +490,9 @@ function sidebar() {
   } else if (role === 'manager') {
     items = [['home', 'Websites', 'all'], ['commission', 'Commission', 'commission'], ['settings', 'Settings', 'settings']].map(([k, l, ic]) => btn(k, l, null, S.nav === k, 'nav', ic)).join('');
   } else {
-    const cnt = { all: () => true, action: needsAction, boss: w => ['boss_review', 'approved'].includes(w.status), live: w => LIVE_STATUSES.includes(w.status), rejected: w => w.status === 'rejected' };
+    const cnt = { all: w => !LIVE_STATUSES.includes(w.status), action: needsAction, boss: w => ['boss_review', 'approved'].includes(w.status), live: w => LIVE_STATUSES.includes(w.status), rejected: w => w.status === 'rejected' };
     const mf = (k, l, ic) => btn(k, l, ws.filter(cnt[k]).length, S.mem.f === k && S.nav === 'home', 'mfilter', ic);
-    items = mf('all', 'My Websites', 'mine') + mf('action', 'Action needed', 'action') + mf('boss', 'Under review', 'review') + mf('live', 'Live sites', 'site') + btn('earn', 'Live links', null, S.nav === 'earn', 'nav', 'needs') + mf('rejected', 'Rejected', 'rejected') + btn('trash', 'Trash', S.trash.length, S.nav === 'trash', 'nav', 'trash').replace('class="nav ', 'class="nav trashbtn ');
+    items = mf('all', 'My Websites', 'mine') + mf('action', 'Action needed', 'action') + mf('boss', 'Under review', 'review') + mf('live', 'Live sites', 'site') + btn('earn', 'Live links', null, S.nav === 'earn', 'nav', 'needs') + btn('minv', 'Invoices', null, S.nav === 'minv', 'nav', 'inv') + mf('rejected', 'Rejected', 'rejected') + btn('trash', 'Trash', S.trash.length, S.nav === 'trash', 'nav', 'trash').replace('class="nav ', 'class="nav trashbtn ');
   }
   return `<nav class="side" aria-label="Sections">${items}</nav>`;
 }
@@ -509,6 +509,21 @@ function bossView() {
 // ---------- Member ----------
 const needsAction = w => ['link_ready', 'sent'].includes(w.status);
 
+function invoicesView() {
+  const f = S.invF || 'all';
+  const label = { live: 'Invoice sent', invoice_received: 'Received by admin', paid: 'Paid' };
+  const rows = visibleSites().filter(w => w.deal_type === 'paid').flatMap(w => [
+    ...hist(w).map(h => ({ w, inv: h.invoice_url, st: 'paid', d: h.live_date })),
+    ...(LIVE_STATUSES.includes(w.status) ? [{ w, inv: w.invoice_url, st: w.status, d: w.status === 'paid' ? w.paid_date || w.live_date : w.live_date }] : []),
+  ]).sort((x, y) => (y.d || '').localeCompare(x.d || ''));
+  const shown = rows.filter(r => f === 'all' || (f === 'paid' ? r.st === 'paid' : r.st !== 'paid'));
+  const cnt = { all: rows.length, sent: rows.filter(r => r.st !== 'paid').length, paid: rows.filter(r => r.st === 'paid').length };
+  return `<h2>Invoices <span class="badge">${rows.length}</span></h2>
+    <div class="chips" style="margin-bottom:14px">${[['all', 'All'], ['sent', 'Sent, not paid yet'], ['paid', 'Paid']].map(([k, l]) => `<button class="chip ${f === k ? 'on' : ''}" data-act="invfilter" data-v="${k}">${l} ${cnt[k]}</button>`).join('')}</div>
+    ${shown.length ? `<div class="tablewrap"><table><thead><tr><th>Website</th><th>Invoice</th><th>Status</th><th>Date</th></tr></thead><tbody>${shown.map(r => `<tr data-act="open" data-id="${r.w.id}"><td><b>${esc(r.w.domain)}</b></td><td>${r.inv ? lnk(r.inv) : 'No invoice link'}</td>
+      <td><span class="pill ${r.st === 'paid' ? 'green' : r.st === 'invoice_received' ? 'violet' : 'amber'}">${r.st === 'paid' ? 'Paid' : label[r.st]}</span></td><td>${esc(r.d || '—')}</td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">No invoices here.</div>'}`;
+}
+
 function earnView() {
   const ym = S.month, all = !!S.liveAll;
   const rows = visibleSites().flatMap(w => [...hist(w).map(h => ({ w, x: h.live_url, d: h.live_date })), ...(LIVE_STATUSES.includes(w.status) ? [{ w, x: w.live_url, d: w.live_date }] : [])])
@@ -523,7 +538,7 @@ function memberView() {
   const ws = visibleSites();
   const f = S.mem.f, q = S.mem.q.trim().toLowerCase();
   const filt = {
-    all: () => true, action: needsAction, boss: w => ['boss_review', 'approved'].includes(w.status),
+    all: w => !LIVE_STATUSES.includes(w.status), action: needsAction, boss: w => ['boss_review', 'approved'].includes(w.status),
     live: w => LIVE_STATUSES.includes(w.status), rejected: w => w.status === 'rejected',
   }[f];
   const list = ws.filter(w => filt(w) && (!q || w.domain.includes(q)));
@@ -574,7 +589,7 @@ function render() {
   const a = document.activeElement, focus = a && a.id ? { id: a.id, s: a.selectionStart, e: a.selectionEnd } : null;
   const role = eff().role;
   if (['commission', 'settings'].includes(S.nav) && role !== 'manager') S.nav = 'home';
-  const body = role === 'member' && S.nav === 'earn' ? earnView() : role === 'member' && S.nav === 'trash' ? trashHtml(S.trash, 'Trash', false, w => `<button class="btn" data-act="restore" data-id="${w.id}">Restore</button><button class="btn sm danger" data-act="purge" data-id="${w.id}">Delete forever</button>`) : role === 'boss' && S.nav !== 'home' && sectionDefs(visibleSites())[S.nav] ? sectionView(S.nav) : role === 'manager' ? managerView() : role === 'boss' ? bossView() : memberView();
+  const body = role === 'member' && S.nav === 'minv' ? invoicesView() : role === 'member' && S.nav === 'earn' ? earnView() : role === 'member' && S.nav === 'trash' ? trashHtml(S.trash, 'Trash', false, w => `<button class="btn" data-act="restore" data-id="${w.id}">Restore</button><button class="btn sm danger" data-act="purge" data-id="${w.id}">Delete forever</button>`) : role === 'boss' && S.nav !== 'home' && sectionDefs(visibleSites())[S.nav] ? sectionView(S.nav) : role === 'manager' ? managerView() : role === 'boss' ? bossView() : memberView();
   app.innerHTML = header() + `<div class="layout">${sidebar()}<main>${body}</main></div>`;
   if (focus) { const n = document.getElementById(focus.id); if (n) { n.focus(); try { n.setSelectionRange(focus.s, focus.e); } catch (e) {} } }
 }
@@ -598,6 +613,7 @@ function moreLinks(d) {
 }
 
 const actions = {
+  invfilter: el => { S.invF = el.dataset.v; render(); },
   liveall: () => { S.liveAll = !S.liveAll; render(); },
   seltoggle: el => { S.sel = S.sel || new Set(); S.sel.has(el.dataset.id) ? S.sel.delete(el.dataset.id) : S.sel.add(el.dataset.id); render(); },
   selall: () => { const ids = S.trash.map(w => w.id); S.sel = (S.sel && S.sel.size === ids.length) ? new Set() : new Set(ids); render(); },
