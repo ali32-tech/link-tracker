@@ -510,16 +510,13 @@ function bossView() {
 const needsAction = w => ['link_ready', 'sent'].includes(w.status);
 
 function invoicesView() {
-  const f = S.invF || 'all';
   const label = { live: 'Invoice sent', invoice_received: 'Received by admin', paid: 'Paid' };
   const rows = visibleSites().filter(w => w.deal_type === 'paid').flatMap(w => [
     ...hist(w).map(h => ({ w, inv: h.invoice_url, st: 'paid', d: h.live_date })),
     ...(LIVE_STATUSES.includes(w.status) ? [{ w, inv: w.invoice_url, st: w.status, d: w.status === 'paid' ? w.paid_date || w.live_date : w.live_date }] : []),
   ]).sort((x, y) => (y.d || '').localeCompare(x.d || ''));
-  const shown = rows.filter(r => f === 'all' || (f === 'paid' ? r.st === 'paid' : r.st !== 'paid'));
-  const cnt = { all: rows.length, sent: rows.filter(r => r.st !== 'paid').length, paid: rows.filter(r => r.st === 'paid').length };
+  const shown = rows;
   return `<h2>Invoices <span class="badge">${rows.length}</span></h2>
-    <div class="chips" style="margin-bottom:14px">${[['all', 'All'], ['sent', 'Sent, not paid yet'], ['paid', 'Paid']].map(([k, l]) => `<button class="chip ${f === k ? 'on' : ''}" data-act="invfilter" data-v="${k}">${l} ${cnt[k]}</button>`).join('')}</div>
     ${shown.length ? `<div class="tablewrap"><table><thead><tr><th>Website</th><th>Invoice</th><th>Status</th><th>Date</th></tr></thead><tbody>${shown.map(r => `<tr data-act="open" data-id="${r.w.id}"><td><b>${esc(r.w.domain)}</b></td><td>${r.inv ? lnk(r.inv) : 'No invoice link'}</td>
       <td><span class="pill ${r.st === 'paid' ? 'green' : r.st === 'invoice_received' ? 'violet' : 'amber'}">${r.st === 'paid' ? 'Paid' : label[r.st]}</span></td><td>${esc(r.d || '—')}</td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">No invoices here.</div>'}`;
 }
@@ -542,8 +539,8 @@ function memberView() {
     live: w => LIVE_STATUSES.includes(w.status), rejected: w => w.status === 'rejected',
   }[f];
   const list = ws.filter(w => filt(w) && (!q || w.domain.includes(q)));
-  return `<div class="toolbar"><button class="btn primary" data-act="add" ${readOnly() ? 'disabled' : ''}>+ Add website</button>
-      <input type="search" id="memq" placeholder="Search" value="${esc(S.mem.q)}" data-input="memq"></div>
+  return `${f === 'all' ? `<div class="toolbar"><button class="btn primary" data-act="add" ${readOnly() ? 'disabled' : ''}>+ Add website</button>
+      <input type="search" id="memq" placeholder="Search" value="${esc(S.mem.q)}" data-input="memq"></div>` : ''}
     ${list.length ? `<div class="tablewrap"><table><thead><tr><th>Website</th><th>Deal</th><th class="num">Price</th><th>DR / Traffic</th><th>Status</th><th>Note</th><th>Action</th></tr></thead><tbody>${list.map(memberRow).join('')}</tbody></table></div>` :
       `<div class="empty">${ws.length ? 'No websites in this view.' : 'No websites yet. Click + Add website when a site says yes.'}</div>`}`;
 }
@@ -613,7 +610,6 @@ function moreLinks(d) {
 }
 
 const actions = {
-  invfilter: el => { S.invF = el.dataset.v; render(); },
   liveall: () => { S.liveAll = !S.liveAll; render(); },
   seltoggle: el => { S.sel = S.sel || new Set(); S.sel.has(el.dataset.id) ? S.sel.delete(el.dataset.id) : S.sel.add(el.dataset.id); render(); },
   selall: () => { const ids = S.trash.map(w => w.id); S.sel = (S.sel && S.sel.size === ids.length) ? new Set() : new Set(ids); render(); },
