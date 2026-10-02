@@ -191,7 +191,7 @@ function detailHtml(w) {
   const rows = [
     ['Website', lnk(w.url)], ['Member', esc(memberName(w.member_id))], ['Contact', esc(w.contact_email || '—')],
     ['Deal', dealLabel(w.deal_type)], ['Price', money(w.price)], ['DR / Traffic', `${w.da ?? '—'} / ${w.traffic ?? '—'}`],
-    ['Status', pill(w)], ...(queueOf(w).length ? [['Queued links', ['boss', 'manager'].includes(eff().role) ? queueOf(w).map((x, i) => `${i + 1}. ${esc(x.anchor_text)} → ${esc(x.target_url)}`).join('<br>') : queueOf(w).length]] : []), ...(ownBoss(w) ? [['Current link', `${linkNo(w)}`]] : [['Possible links', w.possible_links ?? '—'], ['Current link', `${linkNo(w)} / ${w.possible_links ?? '?'}`]]),
+    ['Status', pill(w)], ...(w.change_request ? [['Change requested', esc(w.change_request)]] : []), ...(queueOf(w).length ? [['Queued links', ['boss', 'manager'].includes(eff().role) ? queueOf(w).map((x, i) => `${i + 1}. ${esc(x.anchor_text)} → ${esc(x.target_url)}`).join('<br>') : queueOf(w).length]] : []), ...(ownBoss(w) ? [['Current link', `${linkNo(w)}`]] : [['Possible links', w.possible_links ?? '—'], ['Current link', `${linkNo(w)} / ${w.possible_links ?? '?'}`]]),
     ['Target URL', lnk(w.target_url)], ['Anchor text', esc(w.anchor_text || '—')],
   ];
   if (w.status === 'rejected') rows.push(['Reject reason', esc(w.reject_reason || '—')]);
@@ -224,7 +224,7 @@ function openDetail(id) {
   if (role === 'manager') {
     const own = w.member_id === S.profile.id && !S.preview;
     const step = !own ? '' : w.status === 'link_ready' ? `<button class="btn" data-act="copymsg" data-id="${w.id}">Copy message for website</button><button class="btn primary" data-act="sentbtn" data-id="${w.id}">Link sent to website</button>`
-      : w.status === 'sent' ? `<button class="btn primary" data-act="livebtn" data-id="${w.id}">Link is live</button>` : '';
+      : w.status === 'sent' ? `<button class="btn primary" data-act="livebtn" data-id="${w.id}">Link is live</button><button class="btn" data-act="reqchange" data-id="${w.id}">${w.change_request ? 'Edit request' : 'Request change'}</button>` : '';
     extra = `<div class="btns" style="margin-top:14px">${step}${own ? `<button class="btn" data-act="edit" data-id="${w.id}">Edit</button>` : ''}<button class="btn danger" data-act="del" data-id="${w.id}">Delete</button></div>`;
   }
   openDrawer(w.domain, detailHtml(w) + extra, 'detail', w.id);
