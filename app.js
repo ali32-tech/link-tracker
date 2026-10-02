@@ -336,6 +336,8 @@ function sectionDefs(allWs) {
   const act = html => (eff().role === 'boss' ? html : '');
   return {
     mine: { label: 'My websites', sub: 'Websites you add yourself. They need no approval and nobody else can see them.', list: mineList, add: true, own: true },
+    mylinks: { label: 'Website links', sub: 'Links you have sent to your own websites.', linksTable: true,
+      list: mineList.flatMap(w => [...hist(w).map(x => ({ w, t: x.target_url, n: x.anchor_text })), ...(['sent', 'live', 'invoice_received', 'paid'].includes(w.status) && w.target_url ? [{ w, t: w.target_url, n: w.anchor_text }] : [])]) },
     myexch: { label: 'My exchange links to place', sub: 'Your own exchange websites that are live. Place their link.', list: mineList.filter(w => w.deal_type === 'exchange' && w.status === 'live' && !w.their_link_live),
       extra: [['Our live link', w => lnk(w.live_url)], ['Their link', w => lnk(w.their_link)]], act: w => ownActions(w) },
     mynext: { label: 'My next links', sub: 'Your own finished websites. Add the next link.', list: mineList.filter(nextPossible),
@@ -374,6 +376,11 @@ function mineHeader(list) {
 function sectionView(key) {
   const d = sectionDefs(visibleSites())[key];
   const all = d.list;
+  if (d.linksTable) {
+    return `<h2>${d.label} <span class="badge">${d.list.length}</span></h2><p class="sub">${d.sub}</p>
+      ${d.list.length ? `<div class="tablewrap"><table><thead><tr><th>Website</th><th>Link sent</th><th>Anchor text</th><th>DR / Traffic</th></tr></thead><tbody>
+      ${d.list.map(r => `<tr data-act="open" data-id="${r.w.id}"><td><b>${esc(r.w.domain)}</b></td><td>${lnk(r.t)}</td><td>${esc(r.n || '—')}</td><td>${r.w.da ?? '—'} / ${r.w.traffic ?? '—'}</td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">No links sent yet.</div>'}`;
+  }
   const extra = d.extra || [['Updated', w => (w.updated_at || '').slice(0, 10)]];
   const hasAct = d.own || d.act;
   const actCell = w => (d.own ? `${w.status === 'approved' ? ownActions(w) : ''}${ownStep(w)}${S.preview ? '' : `<button class="btn sm" data-act="edit" data-id="${w.id}">Edit</button><button class="btn sm danger" data-act="del" data-id="${w.id}">Delete</button>`}` : d.act(w));
@@ -413,7 +420,7 @@ function sidebar() {
     const row = ([k, l, n, ic], sub) => btn(k, l, n, S.nav === k, 'nav', ic).replace('class="nav ', `class="nav ${sub ? 'sub ' : ''}`);
     const kids = (open, list) => (open ? list.map(r => row(r, true)).join('') : '');
     items = row(['mine', 'My websites', d.mine.list.length, 'mine']).replace(/<\/button>$/, chev(S.mineOpen, 'minetoggle')) +
-      kids(S.mineOpen, [['myexch', 'Exchange links', d.myexch.list.length, 'exch'], ['mynext', 'Next link possible', d.mynext.list.length, 'next'], ['myinv', 'Invoices & payments', d.myinv.list.length, 'inv']]) +
+      kids(S.mineOpen, [['mylinks', 'Website links', d.mylinks.list.length, 'needs'], ['myexch', 'Exchange links', d.myexch.list.length, 'exch'], ['mynext', 'Next link possible', d.mynext.list.length, 'next'], ['myinv', 'Invoices & payments', d.myinv.list.length, 'inv']]) +
       row(['home', 'Review', ws.filter(w => w.status === 'boss_review').length, 'review']).replace(/<\/button>$/, chev(S.revOpen, 'revtoggle')) +
       kids(S.revOpen, [['needs', 'Needs a link', d.needs.list.length, 'needs'], ['exch', 'Exchange links', d.exch.list.length, 'exch'], ['next', 'Next link possible', d.next.list.length, 'next']]) +
       row(['inv', 'Invoices & payments', d.inv.list.length, 'inv']) + row(['rejected', 'Rejected', d.rejected.list.length, 'rejected']) + row(['all', 'All websites', d.all.list.length, 'all']) +
@@ -528,7 +535,7 @@ const actions = {
   showpw: el => { const i = el.previousElementSibling; i.type = i.type === 'password' ? 'text' : 'password'; el.textContent = i.type === 'password' ? 'Show' : 'Hide'; },
   logout: async () => { if (S.chan) sb.removeChannel(S.chan); await sb.auth.signOut(); },
   close: closeDrawer,
-  nav: el => { S.nav = el.dataset.v; S.revOpen = ['home', 'needs', 'exch', 'next'].includes(S.nav); S.mineOpen = ['mine', 'myexch', 'mynext', 'myinv'].includes(S.nav); render(); window.scrollTo(0, 0); },
+  nav: el => { S.nav = el.dataset.v; S.revOpen = ['home', 'needs', 'exch', 'next'].includes(S.nav); S.mineOpen = ['mine', 'mylinks', 'myexch', 'mynext', 'myinv'].includes(S.nav); render(); window.scrollTo(0, 0); },
   revtoggle: () => { S.revOpen = !S.revOpen; render(); },
   minetoggle: () => { S.mineOpen = !S.mineOpen; render(); },
   pipe: el => { S.mf.status = S.mf.status === el.dataset.v ? '' : el.dataset.v; render(); },
