@@ -191,7 +191,7 @@ function detailHtml(w) {
   const rows = [
     ['Website', lnk(w.url)], ['Member', esc(memberName(w.member_id))], ['Contact', esc(w.contact_email || '—')],
     ['Deal', dealLabel(w.deal_type)], ['Price', money(w.price)], ['DR / Traffic', `${w.da ?? '—'} / ${w.traffic ?? '—'}`],
-    ['Status', pill(w)], ...(queueOf(w).length ? [['Queued links', queueOf(w).length]] : []), ...(ownBoss(w) ? [['Current link', `${linkNo(w)}`]] : [['Possible links', w.possible_links ?? '—'], ['Current link', `${linkNo(w)} / ${w.possible_links ?? '?'}`]]),
+    ['Status', pill(w)], ...(queueOf(w).length ? [['Queued links', ['boss', 'manager'].includes(eff().role) ? queueOf(w).map((x, i) => `${i + 1}. ${esc(x.anchor_text)} → ${esc(x.target_url)}`).join('<br>') : queueOf(w).length]] : []), ...(ownBoss(w) ? [['Current link', `${linkNo(w)}`]] : [['Possible links', w.possible_links ?? '—'], ['Current link', `${linkNo(w)} / ${w.possible_links ?? '?'}`]]),
     ['Target URL', lnk(w.target_url)], ['Anchor text', esc(w.anchor_text || '—')],
   ];
   if (w.status === 'rejected') rows.push(['Reject reason', esc(w.reject_reason || '—')]);
@@ -247,7 +247,7 @@ function managerSites() {
     <div class="btns" style="margin-bottom:12px"><button class="btn primary" data-act="add">+ Add website</button><button class="btn" data-act="whatsapp">Copy WhatsApp message</button>
       <button class="btn" data-act="import">Import</button><button class="btn" data-act="export">Export CSV</button></div>
     ${rows.length ? `<div class="tablewrap"><table><thead><tr><th>Website</th><th>Name</th><th>Deal</th><th class="num">Price</th><th>DR / Traffic</th><th class="num">Links</th><th>Status</th><th>Updated</th></tr></thead><tbody>
-      ${rows.map(w => `<tr data-act="open" data-id="${w.id}"><td><b>${esc(w.domain)}</b></td><td>${esc(memberName(w.member_id))}</td><td>${dealLabel(w.deal_type)}</td>
+      ${rows.map(w => `<tr data-act="open" data-id="${w.id}"><td><b>${esc(w.domain)}</b>${linkLines(w)}</td><td>${esc(memberName(w.member_id))}</td><td>${dealLabel(w.deal_type)}</td>
       <td class="num">${money(w.price)}</td><td>${w.da ?? '—'} / ${w.traffic ?? '—'}</td><td class="num">${ownBoss(w) ? hist(w).length + (roundDone(w) ? 1 : 0) : w.possible_links ? `${hist(w).length + (roundDone(w) ? 1 : 0)} / ${w.possible_links}` : '—'}</td>
       <td>${pill(w)}</td><td>${(w.updated_at || '').slice(0, 10)}</td></tr>`).join('')}</tbody></table></div>`
       : `<div class="empty">${all.length ? 'No websites match these filters.' : 'No websites yet. Team members add them when a site says yes, or use Import.'}</div>`}`;
@@ -374,7 +374,7 @@ function sectionView(key) {
     ${d.add ? `<div class="toolbar"><button class="btn primary" data-act="add" ${readOnly() ? 'disabled' : ''}>+ Add website</button></div>` : ''}${d.own ? mineHeader(all) : ''}
     ${d.search ? `<div class="toolbar"><input type="search" id="bq" placeholder="Search website" value="${esc(S.bossQ)}" data-input="bq"></div>` : ''}
     ${!d.list.length ? '<div class="empty">Nothing here right now.</div>' : `<div class="tablewrap"><table><thead><tr><th>Website</th><th>Name</th><th>Deal</th><th class="num">Price</th><th>DR / Traffic</th><th class="num">Links</th><th>Status</th>${extra.map(([l]) => `<th>${l}</th>`).join('')}${hasAct ? '<th>Action</th>' : ''}</tr></thead><tbody>
-      ${d.list.map(w => `<tr data-act="open" data-id="${w.id}"><td><b>${esc(w.domain)}</b></td><td>${esc(memberName(w.member_id))}</td><td>${dealLabel(w.deal_type)}</td>
+      ${d.list.map(w => `<tr data-act="open" data-id="${w.id}"><td><b>${esc(w.domain)}</b>${linkLines(w)}</td><td>${esc(memberName(w.member_id))}</td><td>${dealLabel(w.deal_type)}</td>
       <td class="num">${money(w.price)}</td><td>${w.da ?? '—'} / ${w.traffic ?? '—'}</td><td class="num">${ownBoss(w) ? hist(w).length + (roundDone(w) ? 1 : 0) : w.possible_links ? `${hist(w).length + (roundDone(w) ? 1 : 0)} / ${w.possible_links}` : '—'}</td>
       <td>${pill(w)}</td>${extra.map(([, fn]) => `<td>${fn(w)}</td>`).join('')}${hasAct ? `<td class="nowrap">${actCell(w)}</td>` : ''}</tr>`).join('')}</tbody></table></div>`}`;
 }
@@ -424,7 +424,7 @@ function bossView() {
   const review = visibleSites().filter(w => w.status === 'boss_review');
   return `<h2>Review <span class="badge">${review.length}</span></h2><p class="sub">Websites waiting for your approval.</p>
     ${review.length ? `<div class="tablewrap"><table><thead><tr><th>Website</th><th>Name</th><th>Deal</th><th class="num">Price</th><th>DR / Traffic</th><th>Action</th></tr></thead><tbody>
-      ${review.map(w => `<tr data-act="open" data-id="${w.id}"><td><b>${esc(w.domain)}</b></td><td>${esc(memberName(w.member_id))}</td><td>${dealLabel(w.deal_type)}</td>
+      ${review.map(w => `<tr data-act="open" data-id="${w.id}"><td><b>${esc(w.domain)}</b>${linkLines(w)}</td><td>${esc(memberName(w.member_id))}</td><td>${dealLabel(w.deal_type)}</td>
       <td class="num">${money(w.price)}</td><td>${w.da ?? '—'} / ${w.traffic ?? '—'}</td>
       <td class="nowrap">${B('approve', w.id, 'Approve', true)}${B('approvelink', w.id, 'Approve + add link')}<button class="btn danger" data-act="reject" data-id="${w.id}">Reject</button></td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">Nothing here right now.</div>'}`;
 }
@@ -512,6 +512,13 @@ const site = id => S.sites.find(w => w.id === id);
 const pairHtml = () => `<div class="pair"><label>Another link: Target URL</label><input name="more_target" placeholder="https://client-site.com/page"><label>Another link: Anchor text</label><input name="more_anchor"></div>`;
 const linkFieldsFor = (t, n) => `<label>Target URL</label><input name="target_url" required placeholder="https://client-site.com/page" value="${esc(t || '')}"><label>Anchor text</label><input name="anchor_text" required value="${esc(n || '')}"><div id="morelinks"></div><button type="button" class="btn sm" data-act="morelink" style="margin-top:10px">+ Add another link</button>`;
 const linkFields = linkFieldsFor('', '');
+const short = (u, n = 38) => String(u || '').replace(/^https?:\/\/(www\.)?/i, '').slice(0, n);
+const linkLines = w => {
+  if (!['boss', 'manager'].includes(eff().role)) return '';
+  const cur = w.target_url ? `<div class="mini">${esc(w.anchor_text || '—')} → ${esc(short(w.target_url))}</div>` : '';
+  const q = queueOf(w).map((x, i) => `<div class="mini queued">Queued ${i + 1}: ${esc(x.anchor_text)} → ${esc(short(x.target_url))}</div>`).join('');
+  return cur + q;
+};
 const queueOf = w => (Array.isArray(w.queued_links) ? w.queued_links : []);
 function moreLinks(d) {
   const t = d.getAll('more_target').map(txt), n = d.getAll('more_anchor').map(txt), out = [];

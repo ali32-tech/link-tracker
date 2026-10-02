@@ -218,3 +218,5 @@ main .tablewrap{margin-top:4px}
 @media(max-width:800px){.nav.sub{margin-left:0}.nav.sub:before{display:none}}
 
 .chev{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:6px;color:var(--muted);transition:transform .15s;transform:rotate(-90deg)}.chev.open{transform:none}.chev:hover{background:var(--border)}
+
+.mini{font-size:12px;font-weight:400;color:var(--muted);margin-top:2px}.mini.queued{color:var(--accent)}
