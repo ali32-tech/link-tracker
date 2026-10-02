@@ -89,7 +89,7 @@ async function loadData() {
   const w = res.shift();
   if (w.error) return toast(errMsg(w.error), 'err');
   S.sites = w.data.filter(x => !x.deleted_at);
-  S.trash = S.profile.role === 'boss' ? w.data.filter(x => x.deleted_at) : [];
+  S.trash = ['boss', 'member'].includes(S.profile.role) ? w.data.filter(x => x.deleted_at) : [];
   { const s = res.shift(); if (s.data) S.teamRate = +s.data.team_rate; }
   if (role !== 'member') {
     let p = res.shift();
@@ -419,18 +419,20 @@ function mineHeader(list) {
     <div class="stat tint-purple"><b>${paidList.length} · ${money(paidAmount)}</b><span>Paid (all links)</span></div></div>`;
 }
 
+function trashHtml(list, label, withName, actFn) {
+  S.sel = new Set([...(S.sel || [])].filter(id => list.some(w => w.id === id)));
+  const n = S.sel.size, allOn = list.length && n === list.length;
+  return `<h2>${label} <span class="badge">${list.length}</span></h2>
+    ${n ? `<div class="toolbar"><span class="hint">${n} selected</span><button class="btn" data-act="bulkrestore">Restore selected</button><button class="btn danger" data-act="bulkpurge">Delete selected forever</button></div>` : ''}
+    ${list.length ? `<div class="tablewrap"><table><thead><tr><th><input type="checkbox" data-act="selall" ${allOn ? 'checked' : ''} aria-label="Select all"></th><th>Website</th>${withName ? '<th>Name</th>' : ''}<th>Deal</th><th class="num">Price</th><th>DR / Traffic</th><th>Status</th><th>Deleted</th><th>Action</th></tr></thead><tbody>
+    ${list.map(w => `<tr><td><input type="checkbox" data-act="seltoggle" data-id="${w.id}" ${S.sel.has(w.id) ? 'checked' : ''} aria-label="Select"></td><td><b>${esc(w.domain)}</b></td>${withName ? `<td>${esc(memberName(w.member_id))}</td>` : ''}<td>${dealLabel(w.deal_type)}</td>
+    <td class="num">${money(w.price)}</td><td>${w.da ?? '—'} / ${w.traffic ?? '—'}</td><td>${pill(w)}</td><td>${(w.deleted_at || '').slice(0, 10)}</td><td class="nowrap">${actFn(w)}</td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">Trash is empty.</div>'}`;
+}
+
 function sectionView(key) {
   const d = sectionDefs(visibleSites())[key];
   const all = d.list;
-  if (key === 'trash') {
-    S.sel = new Set([...(S.sel || [])].filter(id => d.list.some(w => w.id === id)));
-    const n = S.sel.size, allOn = d.list.length && n === d.list.length;
-    return `<h2>${d.label} <span class="badge">${d.list.length}</span></h2>
-      ${n ? `<div class="toolbar"><span class="hint">${n} selected</span><button class="btn" data-act="bulkrestore">Restore selected</button><button class="btn danger" data-act="bulkpurge">Delete selected forever</button></div>` : ''}
-      ${d.list.length ? `<div class="tablewrap"><table><thead><tr><th><input type="checkbox" data-act="selall" ${allOn ? 'checked' : ''} aria-label="Select all"></th><th>Website</th><th>Name</th><th>Deal</th><th class="num">Price</th><th>DR / Traffic</th><th>Status</th><th>Deleted</th><th>Action</th></tr></thead><tbody>
-      ${d.list.map(w => `<tr><td><input type="checkbox" data-act="seltoggle" data-id="${w.id}" ${S.sel.has(w.id) ? 'checked' : ''} aria-label="Select"></td><td><b>${esc(w.domain)}</b></td><td>${esc(memberName(w.member_id))}</td><td>${dealLabel(w.deal_type)}</td>
-      <td class="num">${money(w.price)}</td><td>${w.da ?? '—'} / ${w.traffic ?? '—'}</td><td>${pill(w)}</td><td>${(w.deleted_at || '').slice(0, 10)}</td><td class="nowrap">${d.act(w)}</td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">Trash is empty.</div>'}`;
-  }
+  if (key === 'trash') return trashHtml(d.list, d.label, true, w => d.act(w));
   if (d.cols) {
     const rows = d.wrap ? d.list.map(w => ({ w, x: w, cur: true })) : d.list;
     return `<h2>${d.label} <span class="badge">${rows.length}</span></h2>
@@ -488,7 +490,7 @@ function sidebar() {
     items = [['home', 'Websites', 'all'], ['commission', 'Commission', 'commission'], ['settings', 'Settings', 'settings']].map(([k, l, ic]) => btn(k, l, null, S.nav === k, 'nav', ic)).join('');
   } else {
     const cnt = { all: () => true, action: needsAction, boss: w => ['boss_review', 'approved'].includes(w.status), live: w => LIVE_STATUSES.includes(w.status), rejected: w => w.status === 'rejected' };
-    items = [['all', 'All', 'all'], ['action', 'Action needed', 'action'], ['boss', 'Under review', 'review'], ['live', 'Live', 'live'], ['rejected', 'Rejected', 'rejected']].map(([k, l, ic]) => btn(k, l, ws.filter(cnt[k]).length, S.mem.f === k, 'mfilter', ic)).join('');
+    items = [['all', 'All', 'all'], ['action', 'Action needed', 'action'], ['boss', 'Under review', 'review'], ['live', 'Live', 'live'], ['rejected', 'Rejected', 'rejected']].map(([k, l, ic]) => btn(k, l, ws.filter(cnt[k]).length, S.mem.f === k && S.nav !== 'trash', 'mfilter', ic)).join('') + btn('trash', 'Trash', S.trash.length, S.nav === 'trash', 'nav', 'trash').replace('class="nav ', 'class="nav trashbtn ');
   }
   return `<nav class="side" aria-label="Sections">${items}</nav>`;
 }
@@ -565,7 +567,7 @@ function render() {
   const a = document.activeElement, focus = a && a.id ? { id: a.id, s: a.selectionStart, e: a.selectionEnd } : null;
   const role = eff().role;
   if (['commission', 'settings'].includes(S.nav) && role !== 'manager') S.nav = 'home';
-  const body = role === 'boss' && S.nav !== 'home' && sectionDefs(visibleSites())[S.nav] ? sectionView(S.nav) : role === 'manager' ? managerView() : role === 'boss' ? bossView() : memberView();
+  const body = role === 'member' && S.nav === 'trash' ? trashHtml(S.trash, 'Trash', false, w => `<button class="btn" data-act="restore" data-id="${w.id}">Restore</button><button class="btn sm danger" data-act="purge" data-id="${w.id}">Delete forever</button>`) : role === 'boss' && S.nav !== 'home' && sectionDefs(visibleSites())[S.nav] ? sectionView(S.nav) : role === 'manager' ? managerView() : role === 'boss' ? bossView() : memberView();
   app.innerHTML = header() + `<div class="layout">${sidebar()}<main>${body}</main></div>`;
   if (focus) { const n = document.getElementById(focus.id); if (n) { n.focus(); try { n.setSelectionRange(focus.s, focus.e); } catch (e) {} } }
 }
@@ -611,9 +613,9 @@ const actions = {
   },
   reqchange: el => {
     const w = site(el.dataset.id);
-    openDrawer('Request a change', `<form data-form="changereq" data-id="${w.id}"><p class="hint">Tell the Director what the website wants changed (anchor text, URL, or anything else). The link stays as sent until the Director updates it.</p>
+    openDrawer('Request a change', `<form data-form="changereq" data-id="${w.id}"><p class="hint">Tell the admin what the website wants changed (anchor text, URL, or anything else). The link stays as sent until the admin updates it.</p>
       <label>What should change?</label><textarea name="note" rows="4" required maxlength="500">${esc(w.change_request || '')}</textarea>
-      <div style="margin-top:14px"><button class="btn primary big" type="submit">Send to Director</button></div>${w.change_request ? `<div style="margin-top:10px"><button type="button" class="btn danger" data-act="clearreq" data-id="${w.id}">Cancel my request</button></div>` : ''}</form>`, 'form', w.id);
+      <div style="margin-top:14px"><button class="btn primary big" type="submit">Send to admin</button></div>${w.change_request ? `<div style="margin-top:10px"><button type="button" class="btn danger" data-act="clearreq" data-id="${w.id}">Cancel my request</button></div>` : ''}</form>`, 'form', w.id);
   },
   clearreq: el => upd(el.dataset.id, { change_request: null }, 'Request cleared'),
   linkdetail: el => {
@@ -643,7 +645,7 @@ const actions = {
   minetoggle: () => { S.mineOpen = !S.mineOpen; render(); },
   pipe: el => { S.mf.status = S.mf.status === el.dataset.v ? '' : el.dataset.v; render(); },
   clearf: () => { S.mf = { status: '', member: '', deal: '', q: '' }; render(); },
-  mfilter: el => { S.mem.f = el.dataset.v; render(); },
+  mfilter: el => { S.mem.f = el.dataset.v; S.nav = 'home'; render(); },
   exitpreview: () => { S.preview = null; render(); },
   open: el => openDetail(el.dataset.id),
   whatsapp: () => copy(whatsappText()),
@@ -664,7 +666,7 @@ const actions = {
     }
     armed = null;
     const w = site(id);
-    const soft = S.profile.role === 'boss';
+    const soft = ['boss', 'member'].includes(S.profile.role);
     const { error } = soft ? await sb.from('websites').update({ deleted_at: new Date().toISOString() }).eq('id', id) : await sb.from('websites').delete().eq('id', id);
     if (error) return toast(errMsg(error), 'err');
     toast(soft ? 'Moved to Trash' : 'Deleted'); closeDrawer(); refreshSoon();
@@ -823,7 +825,7 @@ const forms = {
     const history = hist(w).map((x, n) => (n === i ? { ...x, ...vals } : x));
     return upd(w.id, { link_history: history }, 'Saved');
   },
-  changereq: (f, d) => upd(f.dataset.id, { change_request: txt(d.get('note')) }, 'Request sent to the Director'),
+  changereq: (f, d) => upd(f.dataset.id, { change_request: txt(d.get('note')) }, 'Request sent to admin'),
   async rolepw(f, d) {
     const pr = S.pendingRole;
     if (!pr) return closeDrawer();

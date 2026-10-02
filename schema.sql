@@ -134,7 +134,7 @@ begin
   new.updated_at := now();
   new.id := old.id; new.member_id := old.member_id; new.created_at := old.created_at;
   if current_setting('app.bypass_guard', true) = '1' then return new; end if;
-  if r <> 'boss' then new.deleted_at := old.deleted_at; end if;
+  if r <> 'boss' and old.member_id <> auth.uid() then new.deleted_at := old.deleted_at; end if;
 
   if r = 'member' or (r = 'manager' and old.member_id = auth.uid()) then
     new.queued_links := old.queued_links;
