@@ -375,7 +375,7 @@ function sectionDefs(allWs) {
     livel: { label: 'Live links', list: ws.flatMap(w => [...hist(w).map(h => ({ w, x: h, cur: false })), ...(LIVE_STATUSES.includes(w.status) ? [{ w, x: w, cur: true }] : [])]).sort((p, q) => (q.x.live_date || '').localeCompare(p.x.live_date || '')),
       cols: [['Website', siteCell], ['Name', r => esc(memberName(r.w.member_id))], ['Target URL', r => lnk(r.x.target_url)], ['Anchor text', r => esc(r.x.anchor_text || '—')], ['Live URL', r => lnk(r.x.live_url)], ['Live date', r => esc(r.x.live_date || '—')]] },
     needs: { label: 'Needs a link (Approved)', sub: 'Approved websites that are waiting for a target URL and anchor.', list: ws.filter(w => w.status === 'approved'),
-      extra: [['Possible links', w => w.possible_links ?? '?']], act: w => act(`${B('addlink', w.id, 'Add link', true)}<button class="btn" data-act="bossedit" data-id="${w.id}">Edit</button><button class="btn danger" data-act="reject" data-id="${w.id}">Reject</button>`) },
+      extra: [['Possible links', w => w.possible_links ?? '?']], act: w => act(`${B('addlink', w.id, 'Add link', true)}<button class="btn" data-act="bossedit" data-id="${w.id}">Edit</button><button class="btn" data-act="toreview" data-id="${w.id}">Restore</button><button class="btn danger" data-act="reject" data-id="${w.id}">Reject</button>`) },
     inv: team.inv,
     rlinks: team.links,
     exch: team.exch,
