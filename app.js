@@ -244,7 +244,7 @@ function managerView() {
 }
 
 function managerSites() {
-  const f = S.mf, all = S.sites.filter(w => w.member_id !== S.profile.id);
+  const f = S.mf, all = S.sites.filter(w => w.member_id !== S.profile.id && w.status !== 'rejected');
   const q = f.q.trim().toLowerCase();
   const rows = all.filter(w => (!f.status || w.status === f.status) && (!f.member || w.member_id === f.member) &&
     (!f.deal || w.deal_type === f.deal) && (!q || w.domain.includes(q) || (w.contact_email || '').toLowerCase().includes(q)));
@@ -500,7 +500,7 @@ function sidebar() {
     const cnt = { all: w => !LIVE_STATUSES.includes(w.status) && w.status !== 'rejected', action: needsAction, boss: w => ['boss_review', 'approved'].includes(w.status), live: w => LIVE_STATUSES.includes(w.status), rejected: w => w.status === 'rejected' };
     const mf = (k, l, ic, sub) => btn(k, l, ws.filter(cnt[k]).length, S.mem.f === k && S.nav === 'home', 'mfilter', ic).replace('class="nav ', `class="nav ${sub ? 'sub ' : ''}`);
     const arrow = `<span class="chev ${S.mwOpen ? 'open' : ''}" data-act="mwtoggle" role="button" aria-label="Show or hide sections"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span></button>`;
-    items = mf('all', 'My Websites', 'mine').replace(/<\/button>$/, arrow) + (S.mwOpen ? mf('live', 'Live sites', 'site', true) : '') + btn('earn', 'Live links', null, S.nav === 'earn', 'nav', 'needs') + btn('mexch', 'Exchange links', null, S.nav === 'mexch', 'nav', 'exch') + btn('minv', 'Invoices', null, S.nav === 'minv', 'nav', 'inv') + mf('rejected', 'Rejected', 'rejected') + btn('trash', 'Trash', S.trash.length, S.nav === 'trash', 'nav', 'trash').replace('class="nav ', 'class="nav trashbtn ');
+    items = mf('all', 'My Websites', 'mine').replace(/<\/button>$/, arrow) + (S.mwOpen ? btn('mexch', 'Exchange links', null, S.nav === 'mexch', 'nav', 'exch').replace('class="nav ', 'class="nav sub ') + mf('live', 'Live sites', 'site', true) : '') + btn('earn', 'Live links', null, S.nav === 'earn', 'nav', 'needs') + btn('minv', 'Invoices', null, S.nav === 'minv', 'nav', 'inv') + mf('rejected', 'Rejected', 'rejected') + btn('trash', 'Trash', S.trash.length, S.nav === 'trash', 'nav', 'trash').replace('class="nav ', 'class="nav trashbtn ');
   }
   return `<nav class="side" aria-label="Sections">${items}</nav>`;
 }
@@ -541,12 +541,12 @@ function invoicesView() {
 
 function earnView() {
   const ym = S.month, all = !!S.liveAll;
-  const rows = visibleSites().flatMap(w => [...hist(w).map(h => ({ w, x: h.live_url, d: h.live_date })), ...(LIVE_STATUSES.includes(w.status) ? [{ w, x: w.live_url, d: w.live_date }] : [])])
+  const rows = visibleSites().flatMap(w => [...hist(w).map((h, i) => ({ w, x: h.live_url, d: h.live_date, i })), ...(LIVE_STATUSES.includes(w.status) ? [{ w, x: w.live_url, d: w.live_date, i: -1 }] : [])])
     .filter(r => all || (r.d || '').startsWith(ym)).sort((x, y) => (y.d || '').localeCompare(x.d || ''));
   return `<h2>Live links <span class="badge">${rows.length}</span></h2>
     <div class="toolbar"><label style="margin:0">Month</label><input type="month" style="width:auto" value="${ym}" data-change="month" ${all ? 'disabled' : ''}>
       <button class="chip ${all ? 'on' : ''}" data-act="liveall">All time</button></div>
-    ${rows.length ? `<div class="tablewrap"><table><thead><tr><th>Website</th><th>Live URL</th><th>Live date</th></tr></thead><tbody>${rows.map(r => `<tr data-act="open" data-id="${r.w.id}"><td><b>${esc(r.w.domain)}</b></td><td>${lnk(r.x)}</td><td>${esc(r.d || '—')}</td></tr>`).join('')}</tbody></table></div>` : `<div class="empty">${all ? 'No live links yet.' : 'No live links in this month.'}</div>`}`;
+    ${rows.length ? `<div class="tablewrap"><table><thead><tr><th>Website</th><th>Live URL</th><th>Live date</th></tr></thead><tbody>${rows.map(r => `<tr data-act="livedetail" data-id="${r.w.id}" data-i="${r.i}"><td><b>${esc(r.w.domain)}</b></td><td>${lnk(r.x)}</td><td>${esc(r.d || '—')}</td></tr>`).join('')}</tbody></table></div>` : `<div class="empty">${all ? 'No live links yet.' : 'No live links in this month.'}</div>`}`;
 }
 
 function memberView() {
@@ -631,6 +631,11 @@ function moreLinks(d) {
 }
 
 const actions = {
+  livedetail: el => {
+    const w = site(el.dataset.id), i = +el.dataset.i, x = i >= 0 ? hist(w)[i] : w;
+    if (!x) return;
+    openDrawer(w.domain, kvRows([['Website', esc(w.domain)], ['Target URL', lnk(x.target_url)], ['Anchor text', esc(x.anchor_text || '—')], ['Live URL', lnk(x.live_url)], ['Live date', esc(x.live_date || '—')]]), 'detail-link', w.id);
+  },
   liveall: () => { S.liveAll = !S.liveAll; render(); },
   seltoggle: el => { S.sel = S.sel || new Set(); S.sel.has(el.dataset.id) ? S.sel.delete(el.dataset.id) : S.sel.add(el.dataset.id); render(); },
   selall: () => { const ids = S.trash.map(w => w.id); S.sel = (S.sel && S.sel.size === ids.length) ? new Set() : new Set(ids); render(); },
@@ -683,7 +688,7 @@ const actions = {
   showpw: el => { const i = el.previousElementSibling; i.type = i.type === 'password' ? 'text' : 'password'; el.textContent = i.type === 'password' ? 'Show' : 'Hide'; },
   logout: async () => { if (S.chan) sb.removeChannel(S.chan); await sb.auth.signOut(); },
   close: closeDrawer,
-  nav: el => { S.nav = el.dataset.v; S.revOpen = ['home', 'needs', 'rlinks', 'exch', 'next'].includes(S.nav); S.mineOpen = (S.profile.role === 'manager' ? ['mine', 'mylinks', 'myexch'] : ['mine', 'mylinks', 'myexch', 'mynext', 'myinv']).includes(S.nav); S.wsOpen = S.profile.role === 'manager' && ['home', 'rejected', 'exch', 'livel'].includes(S.nav); if (S.profile.role === 'member') S.mwOpen = false; render(); window.scrollTo(0, 0); },
+  nav: el => { S.nav = el.dataset.v; S.revOpen = ['home', 'needs', 'rlinks', 'exch', 'next'].includes(S.nav); S.mineOpen = (S.profile.role === 'manager' ? ['mine', 'mylinks', 'myexch'] : ['mine', 'mylinks', 'myexch', 'mynext', 'myinv']).includes(S.nav); S.wsOpen = S.profile.role === 'manager' && ['home', 'rejected', 'exch', 'livel'].includes(S.nav); if (S.profile.role === 'member') S.mwOpen = S.nav === 'mexch'; render(); window.scrollTo(0, 0); },
   revtoggle: () => { S.revOpen = !S.revOpen; render(); },
   minetoggle: () => { S.mineOpen = !S.mineOpen; render(); },
   wstoggle: () => { S.wsOpen = !S.wsOpen; render(); },
