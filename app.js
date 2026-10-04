@@ -34,7 +34,15 @@ const linkNo = w => hist(w).length + 1;
 const roundDone = w => (w.deal_type === 'paid' && w.status === 'paid') || (w.deal_type === 'exchange' && w.status === 'live' && w.their_link_live);
 const ownBoss = w => !!S.profile && S.profile.role === 'boss' && w.member_id === S.profile.id;
 const nextPossible = w => roundDone(w) && (ownBoss(w) || linkNo(w) < (w.possible_links || 0));
-const rateOf = p => (p.rate != null && p.rate !== '' ? +p.rate : p.role === 'manager' ? S.bossRate : S.teamRate);
+const rateOf = p => (p.rate != null && p.rate !== '' ? +p.rate : 10);
+function teamPerf(allWs, ym) {
+  return S.people.filter(p => ['member', 'manager'].includes(p.role)).map(p => {
+    const sites = allWs.filter(x => x.member_id === p.id);
+    const live = sites.reduce((n, x) => n + liveCount(x, ym), 0), rate = rateOf(p);
+    return { p, sites, live, rate, pay: live * rate, total: sites.reduce((n, x) => n + hist(x).length + (LIVE_STATUSES.includes(x.status) ? 1 : 0), 0),
+      review: sites.filter(x => x.status === 'boss_review').length, rejected: sites.filter(x => x.status === 'rejected').length };
+  });
+}
 const liveCount = (w, ym) =>
   (LIVE_STATUSES.includes(w.status) && (w.live_date || '').startsWith(ym) ? 1 : 0) +
   hist(w).filter(h => (h.live_date || '').startsWith(ym)).length;
@@ -168,7 +176,7 @@ async function boot() {
   if (error || !p) { app.innerHTML = `<div class="center"><div class="panel"><h1>No access</h1><p>Your account has no profile yet. Ask the Manager to invite ${esc(S.session.user.email)}.</p><button class="btn" data-act="logout">Sign out</button></div></div>`; return; }
   S.profile = p;
   if (p.role === 'boss' && !S.navInit) { S.nav = 'mine'; S.navInit = true; }
-  if (p.role === 'manager' && !S.navInit) { S.mineOpen = false; S.navInit = true; }
+  if (p.role === 'manager' && !S.navInit) { S.nav = 'mine'; S.mineOpen = true; S.navInit = true; }
   if (!p.name) return showName();
   await loadData();
   if (S.chan) sb.removeChannel(S.chan);
@@ -240,7 +248,7 @@ function openDetail(id) {
 
 // ---------- Manager ----------
 function managerView() {
-  return S.nav === 'commission' ? commissionView() : S.nav === 'settings' ? settingsView() : managerSites();
+  return S.nav === 'mteam' ? teamManageView() : managerSites();
 }
 
 function managerSites() {
@@ -261,42 +269,23 @@ function managerSites() {
       : `<div class="empty">${all.length ? 'No websites match these filters.' : 'No websites yet. Team members add them when a site says yes, or use Import.'}</div>`}`;
 }
 
-function commissionView() {
-  const ym = S.month;
-  const members = S.people.filter(p => p.role === 'member' || p.id === S.profile.id);
-  const rows = members.map(m => {
-    const own = m.id === S.profile.id;
-    const ws = S.sites.filter(w => w.member_id === m.id);
-    const live = ws.reduce((a, w) => a + liveCount(w, ym), 0);
-    return {
-      m, total: ws.length, approved: ws.filter(w => !['boss_review', 'rejected'].includes(w.status)).length,
-      rejected: ws.filter(w => w.status === 'rejected').length, live,
-      own, team: own ? 0 : live * rateOf(m), boss: own ? live * rateOf(m) : live * S.bossRate, share: own ? live * rateOf(m) : live * (S.bossRate - rateOf(m)),
-    };
-  });
-  const sum = k => rows.reduce((a, r) => a + r[k], 0);
-  const label = new Date(ym + '-01T00:00').toLocaleString(undefined, { month: 'long', year: 'numeric' });
-  return `<div class="toolbar"><label style="margin:0">Month</label><input type="month" style="width:auto" value="${ym}" data-change="month"></div>
-    <div class="stats"><div class="stat"><b>${money(sum('boss'))}</b><span>Client rate total</span></div><div class="stat"><b>${money(sum('team'))}</b><span>To team</span></div>
-    <div class="stat hot"><b>${money(sum('share'))}</b><span>Your total income</span></div><div class="stat"><b>${sum('live')}</b><span>Live links</span></div>
-    <div class="stat"><b>${rows.filter(r => r.own).reduce((x, r) => x + r.live, 0)}</b><span>My own live links</span></div><div class="stat"><b>${money(rows.filter(r => r.own).reduce((x, r) => x + r.share, 0))}</b><span>My own income</span></div></div>
-    <p class="sub" style="margin-top:12px">${label}: ${money(sum('boss'))} from client rate, ${money(sum('team'))} to team, your total income ${money(sum('share'))}. Your own sites are paid at the full client rate.</p>
-    ${rows.length ? `<div class="tablewrap"><table><thead><tr><th>Name</th><th class="num">Websites</th><th class="num">Approved+</th><th class="num">Rejected</th><th class="num">Live links</th><th class="num">Team payout</th><th class="num">Client rate</th><th class="num">My share</th></tr></thead><tbody>
-      ${rows.map(r => `<tr><td><b>${esc(r.m.name || r.m.email)}</b>${r.own ? ' (you)' : ''}</td><td class="num">${r.total}</td><td class="num">${r.approved}</td><td class="num">${r.rejected}</td><td class="num">${r.live}</td><td class="num">${money(r.team)}</td><td class="num">${money(r.boss)}</td><td class="num">${money(r.share)}</td></tr>`).join('')}</tbody>
-      <tfoot><tr><td>Total</td><td class="num">${sum('total')}</td><td class="num">${sum('approved')}</td><td class="num">${sum('rejected')}</td><td class="num">${sum('live')}</td><td class="num">${money(sum('team'))}</td><td class="num">${money(sum('boss'))}</td><td class="num">${money(sum('share'))}</td></tr></tfoot></table></div>`
-      : '<div class="empty">No team members yet. Invite them in Settings.</div>'}`;
-}
-
-function settingsView() {
-  return `<h2>Rates (per live link)</h2><form data-form="rates" style="max-width:420px">
-    <div class="grid2"><div><label>Team rate ($)</label><input type="number" step="0.01" min="0" name="team_rate" value="${S.teamRate}" required></div>
-    <div><label>Client rate ($)</label><input type="number" step="0.01" min="0" name="boss_rate" value="${S.bossRate}" required></div></div>
-    <p class="hint">The client rate is visible to you only.</p><button class="btn primary" type="submit">Save rates</button></form>
+function teamManageView() {
+  const ym = S.month, perfs = teamPerf(S.sites, ym);
+  const sum = k => perfs.reduce((n, r) => n + r[k], 0);
+  const num2 = (name, id, v) => `<input type="number" class="rate" step="0.01" min="0" value="${v}" data-change="${name}" data-id="${id}" ${S.preview ? 'disabled' : ''}>`;
+  const roleSel = p => (p.role === 'manager' ? 'Manager' : `<select data-change="userrole" data-id="${p.id}" style="width:auto"><option value="member" ${p.role === 'member' ? 'selected' : ''}>Team member</option><option value="boss" ${p.role === 'boss' ? 'selected' : ''}>Director</option></select>`);
+  return `<h2>Team managing</h2>
+    <div class="toolbar"><label style="margin:0">Month</label><input type="month" style="width:auto" value="${ym}" data-change="month"></div>
+    ${perfs.length ? `<div class="tablewrap"><table><thead><tr><th>Name</th><th>Websites</th><th>Under review</th><th>Rejected</th><th>Live links (all)</th><th>Live this month</th><th>Rate / link</th><th>To pay</th></tr></thead><tbody>
+      ${perfs.map(r => `<tr><td><input class="pname" value="${esc(r.p.name || '')}" placeholder="Name" maxlength="60" data-change="pname" data-id="${r.p.id}" ${S.preview ? 'disabled' : ''}></td><td>${r.sites.length}</td><td>${r.review}</td><td>${r.rejected}</td><td>${r.total}</td><td>${r.live}</td><td>${num2('personrate', r.p.id, r.rate)}</td><td><b>${money(r.pay)}</b></td></tr>`).join('')}</tbody>
+      <tfoot><tr><td>Total</td><td>${perfs.reduce((n, r) => n + r.sites.length, 0)}</td><td>${sum('review')}</td><td>${sum('rejected')}</td><td>${sum('total')}</td><td>${sum('live')}</td><td></td><td><b>${money(sum('pay'))}</b></td></tr></tfoot></table></div>` : '<div class="empty">No team members yet.</div>'}
+    <h2>Team</h2>
+    <div class="tablewrap"><table><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Action</th></tr></thead><tbody>
+      ${S.people.map(p => `<tr><td>${esc(p.name || '—')}</td><td>${esc(p.email)}</td><td>${roleSel(p)}</td><td class="nowrap">${p.role === 'manager' || S.preview ? '' : `<button class="btn sm danger" data-act="deluser" data-id="${p.id}">Delete</button>`}</td></tr>`).join('')}
+      ${S.invites.map(i => `<tr><td><i>Invited</i></td><td>${esc(i.email)}</td><td>${i.role === 'boss' ? 'Director' : 'Team member'}</td><td class="nowrap"><button class="btn sm danger" data-act="rminvite" data-v="${esc(i.email)}">Remove</button></td></tr>`).join('')}</tbody></table></div>
     <h2>Invite a user</h2><form data-form="invite" style="max-width:520px"><div class="grid2"><div><label>Email</label><input type="email" name="email" required placeholder="name@example.com"></div>
     <div><label>Role</label><select name="role"><option value="member">Team member</option><option value="boss">Director</option></select></div></div>
-    <p class="hint">They can then create an account with this email on the sign-in page.</p><button class="btn primary" type="submit">Send invite</button></form>
-    <h2>Team</h2>${S.people.length ? `<div class="tablewrap"><table><thead><tr><th>Name</th><th>Email</th><th>Role</th></tr></thead><tbody>${S.people.map(p => `<tr><td>${esc(p.name || '—')}</td><td>${esc(p.email)}</td><td>${p.role === 'manager' ? 'Manager' : `<select data-change="userrole" data-id="${p.id}" style="width:auto"><option value="member" ${p.role === 'member' ? 'selected' : ''}>Team member</option><option value="boss" ${p.role === 'boss' ? 'selected' : ''}>Director</option></select>`}</td></tr>`).join('')}
-      ${S.invites.map(i => `<tr><td><i>Invited</i></td><td>${esc(i.email)}</td><td><button class="btn sm danger" data-act="rminvite" data-v="${esc(i.email)}">Remove</button></td></tr>`).join('')}</tbody></table></div>` : ''}`;
+    <p class="hint">They can then create an account with this email on the sign-in page.</p><button class="btn primary" type="submit">Send invite</button></form>`;
 }
 
 function whatsappText() {
@@ -364,7 +353,7 @@ function sectionDefs(allWs) {
         kind: 'inv', rowAct: r => act(r.cur && ['live', 'invoice_received'].includes(r.w.status) ? invBtns(r.w) : '') + editLink(r, 'inv') },
     };
   };
-  const my = mk(mineList, true), team = mk(ws, false);
+  const my = mk(mineList, true), team = mk(ws, false), both = mk(allWs, false);
   return {
     mine: { label: 'My websites', sub: 'Websites you add yourself. They need no approval and nobody else can see them.', list: mineList, add: true, own: true },
     mylinks: my.links,
@@ -374,6 +363,7 @@ function sectionDefs(allWs) {
     myinv: my.inv,
     livel: { label: 'Live links', list: ws.flatMap(w => [...hist(w).map(h => ({ w, x: h, cur: false })), ...(LIVE_STATUSES.includes(w.status) ? [{ w, x: w, cur: true }] : [])]).sort((p, q) => (q.x.live_date || '').localeCompare(p.x.live_date || '')),
       cols: [['Website', siteCell], ['Name', r => esc(memberName(r.w.member_id))], ['Target URL', r => lnk(r.x.target_url)], ['Anchor text', r => esc(r.x.anchor_text || '—')], ['Live URL', r => lnk(r.x.live_url)], ['Live date', r => esc(r.x.live_date || '—')]], mgrAct: true, rowAct: r => editDel(r.w) },
+    invall: both.inv,
     needs: { label: 'Needs a link (Approved)', sub: 'Approved websites that are waiting for a target URL and anchor.', list: ws.filter(w => w.status === 'approved'),
       extra: [['Possible links', w => w.possible_links ?? '?']], act: w => act(`${B('addlink', w.id, 'Add link', true)}<button class="btn" data-act="bossedit" data-id="${w.id}">Edit</button><button class="btn" data-act="toreview" data-id="${w.id}">Restore</button><button class="btn danger" data-act="reject" data-id="${w.id}">Reject</button>`) },
     inv: team.inv,
@@ -388,22 +378,14 @@ function sectionDefs(allWs) {
     all: { label: 'All websites', sub: '', list: ws.filter(w => !S.bossQ.trim() || w.domain.includes(S.bossQ.trim().toLowerCase())), search: true,
       act: w => act(S.preview ? '' : `<button class="btn sm danger" data-act="del" data-id="${w.id}">Delete</button>`) },
     team: (() => {
-      const ym = S.month;
-      const people = S.people.filter(p => ['member', 'manager'].includes(p.role));
-      const perf = p => {
-        const sites = allWs.filter(x => x.member_id === p.id);
-        const live = sites.reduce((n, x) => n + liveCount(x, ym), 0);
-        const rate = 10;
-        return { sites, live, rate, pay: live * rate, total: sites.reduce((n, x) => n + hist(x).length + (LIVE_STATUSES.includes(x.status) ? 1 : 0), 0),
-          review: sites.filter(x => x.status === 'boss_review').length, rejected: sites.filter(x => x.status === 'rejected').length };
-      };
-      const all = people.map(perf);
-      const sum = k => all.reduce((n, r) => n + r[k], 0);
-      return { label: 'Team managing', sub: 'How each person is doing, and what each person earns for the live links of the selected month.', list: people, wrap: true,
+      const ym = S.month, perfs = teamPerf(allWs, ym);
+      const P = r => perfs.find(x => x.p.id === r.w.id);
+      const sum = k => perfs.reduce((n, r) => n + r[k], 0);
+      return { label: 'Team managing', list: perfs.map(x => x.p), wrap: true,
         toolbar: `<div class="toolbar"><label style="margin:0">Month</label><input type="month" style="width:auto" value="${ym}" data-change="month"></div>`,
-        cols: [['Name', r => `<b>${esc(r.w.name || r.w.email)}</b>`], ['Websites', r => perf(r.w).sites.length], ['Under review', r => perf(r.w).review], ['Rejected', r => perf(r.w).rejected],
-          ['Live links (all)', r => perf(r.w).total], ['Live this month', r => perf(r.w).live], ['Rate / link', r => money(perf(r.w).rate)], ['To pay', r => `<b>${money(perf(r.w).pay)}</b>`]],
-        foot: ['Total', all.reduce((n, r) => n + r.sites.length, 0), sum('review'), sum('rejected'), sum('total'), sum('live'), '', `<b>${money(sum('pay'))}</b>`] };
+        cols: [['Name', r => `<b>${esc(r.w.name || r.w.email)}</b>`], ['Websites', r => P(r).sites.length], ['Under review', r => P(r).review], ['Rejected', r => P(r).rejected],
+          ['Live links (all)', r => P(r).total], ['Live this month', r => P(r).live], ['Rate / link', r => money(P(r).rate)], ['To pay', r => `<b>${money(P(r).pay)}</b>`]],
+        foot: ['Total', perfs.reduce((n, r) => n + r.sites.length, 0), sum('review'), sum('rejected'), sum('total'), sum('live'), '', `<b>${money(sum('pay'))}</b>`] };
     })(),
   };
 }
@@ -495,8 +477,9 @@ function sidebar() {
     const row = ([k, l, n, ic], sub) => btn(k, l, n, S.nav === k, 'nav', ic).replace('class="nav ', `class="nav ${sub ? 'sub ' : ''}`);
     const kids = S.mineOpen ? [['mylinks', 'Website links', d.mylinks.list.length, 'wlinks'], ['myexch', 'Exchange links', d.myexch.list.length, 'exch']].map(r => row(r, true)).join('') : '';
     const wsKids = S.wsOpen ? [['livel', 'Live links', d.livel.list.length, 'live'], ['exch', 'Exchange links', d.exch.list.length, 'exch'], ['rejected', 'Rejected', d.rejected.list.length, 'rejected']].map(r => row(r, true)).join('') : '';
-    items = row(['mine', 'My websites', d.mine.list.length, 'mine']).replace(/<\/button>$/, chev(S.mineOpen, 'minetoggle')) + kids + row(['myinv', 'Invoices & payments', d.myinv.list.length, 'inv']) +
-      row(['home', 'Websites', null, 'all']).replace(/<\/button>$/, chev(S.wsOpen, 'wstoggle')) + wsKids + row(['commission', 'Commission', null, 'commission']) + row(['settings', 'Settings', null, 'settings']);
+    items = row(['mine', 'My websites', d.mine.list.length, 'mine']).replace(/<\/button>$/, chev(S.mineOpen, 'minetoggle')) + kids +
+      row(['home', 'All Websites', null, 'all']).replace(/<\/button>$/, chev(S.wsOpen, 'wstoggle')) + wsKids +
+      row(['invall', 'Invoices & payments', d.invall.list.length, 'inv']) + row(['mteam', 'Team managing', S.people.filter(p => ['member', 'manager'].includes(p.role)).length, 'team']);
   } else {
     const cnt = { all: w => !LIVE_STATUSES.includes(w.status) && w.status !== 'rejected', action: needsAction, boss: w => ['boss_review', 'approved'].includes(w.status), live: w => LIVE_STATUSES.includes(w.status), rejected: w => w.status === 'rejected' };
     const nLinks = list => list.reduce((n, w) => n + hist(w).length + (LIVE_STATUSES.includes(w.status) ? 1 : 0), 0);
@@ -607,15 +590,15 @@ function render() {
   if (!S.profile) return;
   const a = document.activeElement, focus = a && a.id ? { id: a.id, s: a.selectionStart, e: a.selectionEnd } : null;
   const role = eff().role;
-  if (['commission', 'settings'].includes(S.nav) && role !== 'manager') S.nav = 'home';
-  const mySections = ['mine', 'mylinks', 'myexch', 'mynext', 'myinv', 'rejected', 'exch', 'livel'];
+  if (['commission', 'settings'].includes(S.nav)) S.nav = role === 'manager' ? 'mine' : 'home';
+  const mySections = ['mine', 'mylinks', 'myexch', 'mynext', 'myinv', 'invall', 'rejected', 'exch', 'livel'];
   const body = role === 'manager' && mySections.includes(S.nav) ? sectionView(S.nav) : role === 'member' && S.nav === 'mexch' ? exchangeView() : role === 'member' && S.nav === 'minv' ? invoicesView() : role === 'member' && S.nav === 'earn' ? earnView() : role === 'member' && S.nav === 'trash' ? trashHtml(S.trash, 'Trash', false, w => `<button class="btn" data-act="restore" data-id="${w.id}">Restore</button><button class="btn sm danger" data-act="purge" data-id="${w.id}">Delete forever</button>`) : role === 'boss' && S.nav !== 'home' && sectionDefs(visibleSites())[S.nav] ? sectionView(S.nav) : role === 'manager' ? managerView() : role === 'boss' ? bossView() : memberView();
   app.innerHTML = header() + `<div class="layout">${sidebar()}<main>${body}</main></div>`;
   if (focus) { const n = document.getElementById(focus.id); if (n) { n.focus(); try { n.setSelectionRange(focus.s, focus.e); } catch (e) {} } }
 }
 
 // ---------- actions ----------
-const WRITE = new Set(['approve', 'approvelink', 'reject', 'addlink', 'invoice', 'paid', 'theirlive', 'nextlink', 'add', 'edit', 'del', 'sentbtn', 'livebtn', 'import', 'rminvite', 'bossedit', 'restore', 'purge', 'editlink', 'reqchange', 'clearreq', 'bulkrestore', 'bulkpurge', 'ackdone', 'toreview']);
+const WRITE = new Set(['approve', 'approvelink', 'reject', 'addlink', 'invoice', 'paid', 'theirlive', 'nextlink', 'add', 'edit', 'del', 'sentbtn', 'livebtn', 'import', 'rminvite', 'bossedit', 'restore', 'purge', 'editlink', 'reqchange', 'clearreq', 'bulkrestore', 'bulkpurge', 'ackdone', 'toreview', 'deluser']);
 const need = (id, msg, fields, form, title) => openDrawer(title, `<form data-form="${form}" data-id="${id}">${fields}<div style="margin-top:14px"><button class="btn primary big" type="submit">${msg}</button></div></form>`, 'form', id);
 const site = id => S.sites.find(w => w.id === id);
 const pairHtml = () => `<div class="pair"><label>Another link: Target URL</label><input name="more_target" placeholder="https://client-site.com/page"><label>Another link: Anchor text</label><input name="more_anchor"></div>`;
@@ -633,6 +616,13 @@ function moreLinks(d) {
 }
 
 const actions = {
+  deluser: el => {
+    const p = S.people.find(x => x.id === el.dataset.id);
+    S.pendingRole = { kind: 'del', id: el.dataset.id };
+    openDrawer('Confirm your password', `<form data-form="rolepw"><p class="hint">Delete <b>${esc(p ? (p.name || p.email) : 'this user')}</b>? Their account and all their websites will be removed. Enter your password to confirm.</p>
+      <label>Your password</label><input type="password" name="password" required autocomplete="current-password" autofocus>
+      <div style="margin-top:14px"><button class="btn danger" type="submit">Delete user</button></div></form>`, 'confirm');
+  },
   livedetail: el => {
     const w = site(el.dataset.id), i = +el.dataset.i, x = i >= 0 ? hist(w)[i] : w;
     if (!x) return;
@@ -883,10 +873,10 @@ const forms = {
     const check = window.supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY, { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false } });
     const { error: pe } = await check.auth.signInWithPassword({ email: S.session.user.email, password: d.get('password') });
     if (pe) return toast('Wrong password', 'err');
-    const { error } = await sb.rpc('set_user_role', { p_id: pr.id, p_role: pr.role });
+    const { error } = pr.kind === 'del' ? await sb.rpc('delete_user', { p_id: pr.id }) : await sb.rpc('set_user_role', { p_id: pr.id, p_role: pr.role });
     S.pendingRole = null; closeDrawer();
     if (error) { toast(errMsg(error), 'err'); return refreshSoon(); }
-    toast('Role updated'); await loadData(); render();
+    toast(pr.kind === 'del' ? 'User deleted' : 'Role updated'); await loadData(); render();
   },
   async invite(f, d) {
     const email = txt(d.get('email')).toLowerCase();
@@ -894,14 +884,6 @@ const forms = {
     const { error } = await sb.from('invites').upsert({ email, role: d.get('role') === 'boss' ? 'boss' : 'member' });
     if (error) return toast(errMsg(error), 'err');
     toast('Invite added'); f.reset(); refreshSoon();
-  },
-  async rates(f, d) {
-    const [a, b] = await Promise.all([
-      sb.from('settings').update({ team_rate: num(d.get('team_rate')) }).eq('id', 1),
-      sb.from('private_settings').update({ boss_rate: num(d.get('boss_rate')) }).eq('id', 1)]);
-    if (a.error || b.error) return toast(errMsg(a.error || b.error), 'err');
-    S.teamRate = num(d.get('team_rate')); S.bossRate = num(d.get('boss_rate'));
-    toast('Rates saved'); render();
   },
   async import(f, d) {
     const members = S.people.filter(p => p.role === 'member');
@@ -926,6 +908,21 @@ const forms = {
 };
 
 const changes = {
+  async pname(t) {
+    const n = t.value.trim();
+    const p = S.people.find(x => x.id === t.dataset.id);
+    if (!n || (p && n === (p.name || ''))) { if (p) t.value = p.name || ''; return; }
+    const { error } = await sb.rpc('set_person_name', { p_id: t.dataset.id, p_name: n });
+    if (error) { toast(errMsg(error), 'err'); return render(); }
+    toast('Name saved'); await loadData(); render();
+  },
+  async personrate(t) {
+    const v = num(t.value);
+    if (v == null || v < 0) { toast('Enter a valid rate', 'err'); return render(); }
+    const { error } = await sb.rpc('set_person_rate', { p_id: t.dataset.id, p_rate: v });
+    if (error) { toast(errMsg(error), 'err'); return render(); }
+    toast('Rate saved'); await loadData(); render();
+  },
   csvfile(t) {
     const file = t.files[0];
     if (!file) return;
