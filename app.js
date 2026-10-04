@@ -41,7 +41,7 @@ const liveCount = (w, ym) =>
 const errMsg = e => (e && e.code === '23505' ? 'This website is already in the tracker.' : (e && e.message) || 'Something went wrong');
 
 const S = {
-  session: null, revOpen: false, mineOpen: true, mwOpen: true, profile: null, sites: [], trash: [], people: [], invites: [], teamRate: 7, bossRate: 10,
+  session: null, revOpen: false, wsOpen: false, mineOpen: true, mwOpen: true, profile: null, sites: [], trash: [], people: [], invites: [], teamRate: 7, bossRate: 10,
   nav: 'home', mf: { status: '', member: '', deal: '', q: '' }, mem: { f: 'all', q: '' }, bossQ: '',
   month: ymNow(), preview: null, drawer: null, chan: null,
 };
@@ -244,21 +244,21 @@ function managerView() {
 }
 
 function managerSites() {
-  const f = S.mf, all = S.sites;
+  const f = S.mf, all = S.sites.filter(w => w.member_id !== S.profile.id);
   const q = f.q.trim().toLowerCase();
   const rows = all.filter(w => (!f.status || w.status === f.status) && (!f.member || w.member_id === f.member) &&
     (!f.deal || w.deal_type === f.deal) && (!q || w.domain.includes(q) || (w.contact_email || '').toLowerCase().includes(q)));
-  const members = S.people.filter(p => p.role === 'member' || p.id === S.profile.id);
+  const members = S.people.filter(p => p.role === 'member');
   return `<div class="toolbar"><input type="search" id="mq" placeholder="Search website or email" value="${esc(f.q)}" data-input="mq">
       <select data-change="mmember"><option value="">All members</option>${members.map(m => `<option value="${m.id}" ${f.member === m.id ? 'selected' : ''}>${esc(m.name || m.email)}</option>`).join('')}</select>
       <select data-change="mdeal"><option value="">All deals</option><option value="exchange" ${f.deal === 'exchange' ? 'selected' : ''}>Exchange</option><option value="paid" ${f.deal === 'paid' ? 'selected' : ''}>Paid</option></select>
       ${f.status || f.member || f.deal || f.q ? '<button class="btn sm" data-act="clearf">Clear filters</button>' : ''}</div>
     <div class="btns" style="margin-bottom:12px"><button class="btn primary" data-act="add">+ Add website</button><button class="btn" data-act="whatsapp">Copy WhatsApp message</button>
       <button class="btn" data-act="import">Import</button><button class="btn" data-act="export">Export CSV</button></div>
-    ${rows.length ? `<div class="tablewrap"><table><thead><tr><th>Website</th><th>Name</th><th>Deal</th><th class="num">Price</th><th>DR / Traffic</th><th class="num">Links</th><th>Status</th><th>Updated</th></tr></thead><tbody>
-      ${rows.map(w => `<tr data-act="open" data-id="${w.id}"><td><b>${esc(w.domain)}</b></td><td>${esc(memberName(w.member_id))}</td><td>${dealLabel(w.deal_type)}</td>
-      <td class="num">${money(w.price)}</td><td>${w.da ?? '—'} / ${w.traffic ?? '—'}</td><td class="num">${ownBoss(w) ? hist(w).length + (roundDone(w) ? 1 : 0) : w.possible_links ? `${hist(w).length + (roundDone(w) ? 1 : 0)} / ${w.possible_links}` : '—'}</td>
-      <td>${pill(w)}</td><td>${(w.updated_at || '').slice(0, 10)}</td></tr>`).join('')}</tbody></table></div>`
+    ${rows.length ? `<div class="tablewrap"><table><thead><tr><th>Website</th><th>Name</th><th>Price</th><th>DR / Traffic</th><th class="num">Links</th><th>Status</th><th>Updated</th><th>Action</th></tr></thead><tbody>
+      ${rows.map(w => `<tr data-act="open" data-id="${w.id}"><td><b>${esc(w.domain)}</b></td><td>${esc(memberName(w.member_id))}</td>
+      <td>${w.deal_type === 'paid' ? 'Paid ' + money(w.price) : 'Exchange'}</td><td>${w.da ?? '—'} / ${w.traffic ?? '—'}</td><td class="num">${ownBoss(w) ? hist(w).length + (roundDone(w) ? 1 : 0) : w.possible_links ? `${hist(w).length + (roundDone(w) ? 1 : 0)} / ${w.possible_links}` : '—'}</td>
+      <td>${pill(w)}</td><td>${(w.updated_at || '').slice(0, 10)}</td><td class="nowrap"><button class="btn sm" data-act="edit" data-id="${w.id}">Edit</button><button class="btn sm danger" data-act="del" data-id="${w.id}">Delete</button></td></tr>`).join('')}</tbody></table></div>`
       : `<div class="empty">${all.length ? 'No websites match these filters.' : 'No websites yet. Team members add them when a site says yes, or use Import.'}</div>`}`;
 }
 
@@ -373,6 +373,8 @@ function sectionDefs(allWs) {
     mynext: { label: 'Next link possible', sub: 'Your own finished websites. Add the next link.', list: mineList.filter(nextPossible),
       cols: [['Website', siteCell], ['Links placed', r => `${linkNo(r.w)}`], ['DR / Traffic', drCell]], rowAct: r => act(ownActions(r.w)) + editDel(r.w), wrap: true },
     myinv: my.inv,
+    livel: { label: 'Live links', list: ws.flatMap(w => [...hist(w).map(h => ({ w, x: h, cur: false })), ...(LIVE_STATUSES.includes(w.status) ? [{ w, x: w, cur: true }] : [])]).sort((p, q) => (q.x.live_date || '').localeCompare(p.x.live_date || '')),
+      cols: [['Website', siteCell], ['Name', r => esc(memberName(r.w.member_id))], ['Target URL', r => lnk(r.x.target_url)], ['Anchor text', r => esc(r.x.anchor_text || '—')], ['Live URL', r => lnk(r.x.live_url)], ['Live date', r => esc(r.x.live_date || '—')]] },
     needs: { label: 'Needs a link (Approved)', sub: 'Approved websites that are waiting for a target URL and anchor.', list: ws.filter(w => w.status === 'approved'),
       extra: [['Possible links', w => w.possible_links ?? '?']], act: w => act(`${B('addlink', w.id, 'Add link', true)}<button class="btn" data-act="bossedit" data-id="${w.id}">Edit</button><button class="btn danger" data-act="reject" data-id="${w.id}">Reject</button>`) },
     inv: team.inv,
@@ -437,8 +439,8 @@ function sectionView(key) {
     const rows = d.wrap ? d.list.map(w => ({ w, x: w, cur: true })) : d.list;
     return `<h2>${d.label} <span class="badge">${rows.length}</span></h2>
       ${d.toolbar || ''}
-      ${rows.length ? `<div class="tablewrap"><table><thead><tr>${d.cols.map(([l]) => `<th>${l}</th>`).join('')}${d.rowAct ? '<th>Action</th>' : ''}</tr></thead><tbody>
-      ${rows.map(r => `<tr ${d.kind ? `data-act="linkdetail" data-id="${r.w.id}" data-i="${r.i ?? -1}" data-k="${d.kind}"` : ''}>${d.cols.map(([, fn]) => `<td>${fn(r)}</td>`).join('')}${d.rowAct ? `<td class="nowrap">${d.rowAct(r)}</td>` : ''}</tr>`).join('')}</tbody>${d.foot ? `<tfoot><tr>${d.foot.map(c => `<td>${c}</td>`).join('')}</tr></tfoot>` : ''}</table></div>` : '<div class="empty">Nothing here right now.</div>'}`;
+      ${rows.length ? `<div class="tablewrap"><table><thead><tr>${d.cols.map(([l]) => `<th>${l}</th>`).join('')}${d.rowAct && eff().role !== 'manager' ? '<th>Action</th>' : ''}</tr></thead><tbody>
+      ${rows.map(r => `<tr ${d.kind ? `data-act="linkdetail" data-id="${r.w.id}" data-i="${r.i ?? -1}" data-k="${d.kind}"` : ''}>${d.cols.map(([, fn]) => `<td>${fn(r)}</td>`).join('')}${d.rowAct && eff().role !== 'manager' ? `<td class="nowrap">${d.rowAct(r)}</td>` : ''}</tr>`).join('')}</tbody>${d.foot ? `<tfoot><tr>${d.foot.map(c => `<td>${c}</td>`).join('')}</tr></tfoot>` : ''}</table></div>` : '<div class="empty">Nothing here right now.</div>'}`;
   }
   const extra = d.extra || [['Updated', w => (w.updated_at || '').slice(0, 10)]];
   const hasAct = d.own || d.act;
@@ -492,7 +494,8 @@ function sidebar() {
     const chev = (open, act) => `<span class="chev ${open ? 'open' : ''}" data-act="${act}" role="button" aria-label="Show or hide sections"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span></button>`;
     const row = ([k, l, n, ic], sub) => btn(k, l, n, S.nav === k, 'nav', ic).replace('class="nav ', `class="nav ${sub ? 'sub ' : ''}`);
     const kids = S.mineOpen ? [['mylinks', 'Website links', d.mylinks.list.length, 'wlinks'], ['myexch', 'Exchange links', d.myexch.list.length, 'exch']].map(r => row(r, true)).join('') : '';
-    items = row(['home', 'Websites', null, 'all']) + row(['mine', 'My websites', d.mine.list.length, 'mine']).replace(/<\/button>$/, chev(S.mineOpen, 'minetoggle')) + kids + row(['myinv', 'Invoices & payments', d.myinv.list.length, 'inv']) + row(['commission', 'Commission', null, 'commission']) + row(['settings', 'Settings', null, 'settings']);
+    const wsKids = S.wsOpen ? [['rejected', 'Rejected', d.rejected.list.length, 'rejected'], ['exch', 'Exchange links', d.exch.list.length, 'exch'], ['livel', 'Live links', d.livel.list.length, 'live']].map(r => row(r, true)).join('') : '';
+    items = row(['home', 'Websites', null, 'all']).replace(/<\/button>$/, chev(S.wsOpen, 'wstoggle')) + wsKids + row(['mine', 'My websites', d.mine.list.length, 'mine']).replace(/<\/button>$/, chev(S.mineOpen, 'minetoggle')) + kids + row(['myinv', 'Invoices & payments', d.myinv.list.length, 'inv']) + row(['commission', 'Commission', null, 'commission']) + row(['settings', 'Settings', null, 'settings']);
   } else {
     const cnt = { all: w => !LIVE_STATUSES.includes(w.status), action: needsAction, boss: w => ['boss_review', 'approved'].includes(w.status), live: w => LIVE_STATUSES.includes(w.status), rejected: w => w.status === 'rejected' };
     const mf = (k, l, ic, sub) => btn(k, l, ws.filter(cnt[k]).length, S.mem.f === k && S.nav === 'home', 'mfilter', ic).replace('class="nav ', `class="nav ${sub ? 'sub ' : ''}`);
@@ -593,7 +596,7 @@ function render() {
   const a = document.activeElement, focus = a && a.id ? { id: a.id, s: a.selectionStart, e: a.selectionEnd } : null;
   const role = eff().role;
   if (['commission', 'settings'].includes(S.nav) && role !== 'manager') S.nav = 'home';
-  const mySections = ['mine', 'mylinks', 'myexch', 'mynext', 'myinv'];
+  const mySections = ['mine', 'mylinks', 'myexch', 'mynext', 'myinv', 'rejected', 'exch', 'livel'];
   const body = role === 'manager' && mySections.includes(S.nav) ? sectionView(S.nav) : role === 'member' && S.nav === 'minv' ? invoicesView() : role === 'member' && S.nav === 'earn' ? earnView() : role === 'member' && S.nav === 'trash' ? trashHtml(S.trash, 'Trash', false, w => `<button class="btn" data-act="restore" data-id="${w.id}">Restore</button><button class="btn sm danger" data-act="purge" data-id="${w.id}">Delete forever</button>`) : role === 'boss' && S.nav !== 'home' && sectionDefs(visibleSites())[S.nav] ? sectionView(S.nav) : role === 'manager' ? managerView() : role === 'boss' ? bossView() : memberView();
   app.innerHTML = header() + `<div class="layout">${sidebar()}<main>${body}</main></div>`;
   if (focus) { const n = document.getElementById(focus.id); if (n) { n.focus(); try { n.setSelectionRange(focus.s, focus.e); } catch (e) {} } }
@@ -669,9 +672,10 @@ const actions = {
   showpw: el => { const i = el.previousElementSibling; i.type = i.type === 'password' ? 'text' : 'password'; el.textContent = i.type === 'password' ? 'Show' : 'Hide'; },
   logout: async () => { if (S.chan) sb.removeChannel(S.chan); await sb.auth.signOut(); },
   close: closeDrawer,
-  nav: el => { S.nav = el.dataset.v; S.revOpen = ['home', 'needs', 'rlinks', 'exch', 'next'].includes(S.nav); S.mineOpen = (S.profile.role === 'manager' ? ['mine', 'mylinks', 'myexch'] : ['mine', 'mylinks', 'myexch', 'mynext', 'myinv']).includes(S.nav); if (S.profile.role === 'member') S.mwOpen = false; render(); window.scrollTo(0, 0); },
+  nav: el => { S.nav = el.dataset.v; S.revOpen = ['home', 'needs', 'rlinks', 'exch', 'next'].includes(S.nav); S.mineOpen = (S.profile.role === 'manager' ? ['mine', 'mylinks', 'myexch'] : ['mine', 'mylinks', 'myexch', 'mynext', 'myinv']).includes(S.nav); S.wsOpen = S.profile.role === 'manager' && ['home', 'rejected', 'exch', 'livel'].includes(S.nav); if (S.profile.role === 'member') S.mwOpen = false; render(); window.scrollTo(0, 0); },
   revtoggle: () => { S.revOpen = !S.revOpen; render(); },
   minetoggle: () => { S.mineOpen = !S.mineOpen; render(); },
+  wstoggle: () => { S.wsOpen = !S.wsOpen; render(); },
   clearf: () => { S.mf = { status: '', member: '', deal: '', q: '' }; render(); },
   mfilter: el => { S.mem.f = el.dataset.v; S.nav = 'home'; S.mwOpen = ['all', 'action', 'boss', 'live'].includes(S.mem.f); render(); },
   mwtoggle: () => { S.mwOpen = !S.mwOpen; render(); },

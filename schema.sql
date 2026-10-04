@@ -192,6 +192,14 @@ begin
     if new.status in ('invoice_received','paid') and coalesce(trim(new.live_url), '') = '' then
       raise exception 'The link must be live first';
     end if;
+  elsif r = 'manager' then
+    new.status := old.status; new.possible_links := old.possible_links; new.target_url := old.target_url;
+    new.anchor_text := old.anchor_text; new.reject_reason := old.reject_reason; new.live_url := old.live_url;
+    new.their_link := old.their_link; new.their_link_live := old.their_link_live; new.invoice_url := old.invoice_url;
+    new.live_date := old.live_date; new.paid_date := old.paid_date; new.link_history := old.link_history;
+    new.queued_links := old.queued_links; new.change_request := old.change_request; new.change_done_at := old.change_done_at;
+    new.domain := public.normalize_domain(new.url);
+    if new.domain = '' then raise exception 'Invalid website URL'; end if;
   else
     raise exception 'Not allowed';
   end if;
@@ -343,8 +351,8 @@ create policy domains_read on public.domains for select to authenticated using (
 create policy websites_read on public.websites for select to authenticated
   using ((public.auth_role() in ('manager','boss') and public.visible_to_me(member_id)) or member_id = auth.uid());
 create policy websites_update on public.websites for update to authenticated
-  using ((public.auth_role() = 'boss' and public.visible_to_me(member_id)) or (public.auth_role() in ('member','manager') and member_id = auth.uid()))
-  with check ((public.auth_role() = 'boss' and public.visible_to_me(member_id)) or (public.auth_role() in ('member','manager') and member_id = auth.uid()));
+  using ((public.auth_role() in ('boss','manager') and public.visible_to_me(member_id)) or (public.auth_role() in ('member','manager') and member_id = auth.uid()))
+  with check ((public.auth_role() in ('boss','manager') and public.visible_to_me(member_id)) or (public.auth_role() in ('member','manager') and member_id = auth.uid()));
 create policy websites_delete on public.websites for delete to authenticated
   using ((public.auth_role() in ('manager','boss') and public.visible_to_me(member_id)) or (public.auth_role() = 'member' and member_id = auth.uid() and status not in ('live','invoice_received','paid')));
 create policy websites_insert on public.websites for insert to authenticated
