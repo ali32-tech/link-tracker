@@ -498,9 +498,10 @@ function sidebar() {
     items = row(['home', 'Websites', null, 'all']).replace(/<\/button>$/, chev(S.wsOpen, 'wstoggle')) + wsKids + row(['mine', 'My websites', d.mine.list.length, 'mine']).replace(/<\/button>$/, chev(S.mineOpen, 'minetoggle')) + kids + row(['myinv', 'Invoices & payments', d.myinv.list.length, 'inv']) + row(['commission', 'Commission', null, 'commission']) + row(['settings', 'Settings', null, 'settings']);
   } else {
     const cnt = { all: w => !LIVE_STATUSES.includes(w.status) && w.status !== 'rejected', action: needsAction, boss: w => ['boss_review', 'approved'].includes(w.status), live: w => LIVE_STATUSES.includes(w.status), rejected: w => w.status === 'rejected' };
+    const nLinks = list => list.reduce((n, w) => n + hist(w).length + (LIVE_STATUSES.includes(w.status) ? 1 : 0), 0);
     const mf = (k, l, ic, sub) => btn(k, l, ws.filter(cnt[k]).length, S.mem.f === k && S.nav === 'home', 'mfilter', ic).replace('class="nav ', `class="nav ${sub ? 'sub ' : ''}`);
     const arrow = `<span class="chev ${S.mwOpen ? 'open' : ''}" data-act="mwtoggle" role="button" aria-label="Show or hide sections"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span></button>`;
-    items = mf('all', 'My Websites', 'mine').replace(/<\/button>$/, arrow) + (S.mwOpen ? btn('mexch', 'Exchange links', null, S.nav === 'mexch', 'nav', 'exch').replace('class="nav ', 'class="nav sub ') + mf('live', 'Live sites', 'site', true) : '') + btn('earn', 'Live links', null, S.nav === 'earn', 'nav', 'needs') + btn('minv', 'Invoices', null, S.nav === 'minv', 'nav', 'inv') + mf('rejected', 'Rejected', 'rejected') + btn('trash', 'Trash', S.trash.length, S.nav === 'trash', 'nav', 'trash').replace('class="nav ', 'class="nav trashbtn ');
+    items = mf('all', 'My Websites', 'mine').replace(/<\/button>$/, arrow) + (S.mwOpen ? btn('mexch', 'Exchange links', nLinks(ws.filter(w => w.deal_type === 'exchange')), S.nav === 'mexch', 'nav', 'exch').replace('class="nav ', 'class="nav sub ') + mf('live', 'Live sites', 'site', true) : '') + btn('earn', 'Live links', nLinks(ws), S.nav === 'earn', 'nav', 'needs') + btn('minv', 'Invoices', nLinks(ws.filter(w => w.deal_type === 'paid')), S.nav === 'minv', 'nav', 'inv') + mf('rejected', 'Rejected', 'rejected') + btn('trash', 'Trash', S.trash.length, S.nav === 'trash', 'nav', 'trash').replace('class="nav ', 'class="nav trashbtn ');
   }
   return `<nav class="side" aria-label="Sections">${items}</nav>`;
 }
@@ -540,7 +541,7 @@ function invoicesView() {
 }
 
 function earnView() {
-  const ym = S.month, all = !!S.liveAll;
+  const ym = S.month, all = S.liveAll !== false;
   const rows = visibleSites().flatMap(w => [...hist(w).map((h, i) => ({ w, x: h.live_url, d: h.live_date, i })), ...(LIVE_STATUSES.includes(w.status) ? [{ w, x: w.live_url, d: w.live_date, i: -1 }] : [])])
     .filter(r => all || (r.d || '').startsWith(ym)).sort((x, y) => (y.d || '').localeCompare(x.d || ''));
   return `<h2>Live links <span class="badge">${rows.length}</span></h2>
@@ -636,7 +637,7 @@ const actions = {
     if (!x) return;
     openDrawer(w.domain, kvRows([['Website', esc(w.domain)], ['Target URL', lnk(x.target_url)], ['Anchor text', esc(x.anchor_text || '—')], ['Live URL', lnk(x.live_url)], ['Live date', esc(x.live_date || '—')]]), 'detail-link', w.id);
   },
-  liveall: () => { S.liveAll = !S.liveAll; render(); },
+  liveall: () => { S.liveAll = S.liveAll === false; render(); },
   seltoggle: el => { S.sel = S.sel || new Set(); S.sel.has(el.dataset.id) ? S.sel.delete(el.dataset.id) : S.sel.add(el.dataset.id); render(); },
   selall: () => { const ids = S.trash.map(w => w.id); S.sel = (S.sel && S.sel.size === ids.length) ? new Set() : new Set(ids); render(); },
   async bulkrestore() {
