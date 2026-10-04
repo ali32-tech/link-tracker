@@ -393,7 +393,7 @@ function sectionDefs(allWs) {
       const perf = p => {
         const sites = allWs.filter(x => x.member_id === p.id);
         const live = sites.reduce((n, x) => n + liveCount(x, ym), 0);
-        const rate = rateOf(p);
+        const rate = 10;
         return { sites, live, rate, pay: live * rate, total: sites.reduce((n, x) => n + hist(x).length + (LIVE_STATUSES.includes(x.status) ? 1 : 0), 0),
           review: sites.filter(x => x.status === 'boss_review').length, rejected: sites.filter(x => x.status === 'rejected').length };
       };
@@ -402,7 +402,7 @@ function sectionDefs(allWs) {
       return { label: 'Team managing', sub: 'How each person is doing, and what each person earns for the live links of the selected month.', list: people, wrap: true,
         toolbar: `<div class="toolbar"><label style="margin:0">Month</label><input type="month" style="width:auto" value="${ym}" data-change="month"></div>`,
         cols: [['Name', r => `<b>${esc(r.w.name || r.w.email)}</b>`], ['Websites', r => perf(r.w).sites.length], ['Under review', r => perf(r.w).review], ['Rejected', r => perf(r.w).rejected],
-          ['Live links (all)', r => perf(r.w).total], ['Live this month', r => perf(r.w).live], ['Rate / link', r => `<input type="number" class="rate" step="0.01" min="0" value="${perf(r.w).rate}" data-change="personrate" data-id="${r.w.id}" ${S.preview ? 'disabled' : ''} aria-label="Rate per link">`], ['To pay', r => `<b>${money(perf(r.w).pay)}</b>`]],
+          ['Live links (all)', r => perf(r.w).total], ['Live this month', r => perf(r.w).live], ['Rate / link', r => money(perf(r.w).rate)], ['To pay', r => `<b>${money(perf(r.w).pay)}</b>`]],
         foot: ['Total', all.reduce((n, r) => n + r.sites.length, 0), sum('review'), sum('rejected'), sum('total'), sum('live'), '', `<b>${money(sum('pay'))}</b>`] };
     })(),
   };
@@ -926,13 +926,6 @@ const forms = {
 };
 
 const changes = {
-  async personrate(t) {
-    const v = num(t.value);
-    if (v == null || v < 0) { toast('Enter a valid rate', 'err'); return render(); }
-    const { error } = await sb.rpc('set_person_rate', { p_id: t.dataset.id, p_rate: v });
-    if (error) { toast(errMsg(error), 'err'); return render(); }
-    toast('Rate saved'); await loadData(); render();
-  },
   csvfile(t) {
     const file = t.files[0];
     if (!file) return;
