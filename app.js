@@ -168,6 +168,7 @@ async function boot() {
   if (error || !p) { app.innerHTML = `<div class="center"><div class="panel"><h1>No access</h1><p>Your account has no profile yet. Ask the Manager to invite ${esc(S.session.user.email)}.</p><button class="btn" data-act="logout">Sign out</button></div></div>`; return; }
   S.profile = p;
   if (p.role === 'boss' && !S.navInit) { S.nav = 'mine'; S.navInit = true; }
+  if (p.role === 'manager' && !S.navInit) { S.mineOpen = false; S.navInit = true; }
   if (!p.name) return showName();
   await loadData();
   if (S.chan) sb.removeChannel(S.chan);
@@ -344,8 +345,9 @@ function sectionDefs(allWs) {
   const linkRowsOf = (base, pred, readyToo) => base.filter(pred).flatMap(w => [...hist(w).map((x, i) => ({ w, x, cur: false, i })), ...((readyToo ? ['link_ready', 'sent', 'live', 'invoice_received', 'paid'] : ['sent', 'live', 'invoice_received', 'paid']).includes(w.status) && w.target_url ? [{ w, x: w, cur: true, i: -1 }] : [])]);
   const siteCell = r => `<b>${esc(r.w.domain)}</b>`;
   const drCell = r => `${r.w.da ?? '—'} / ${r.w.traffic ?? '—'}`;
-  const editLink = (r, k) => (S.preview ? '' : `<button class="btn sm" data-act="editlink" data-id="${r.w.id}" data-i="${r.i}" data-k="${k}">Edit</button><button class="btn sm danger" data-act="del" data-id="${r.w.id}">Delete</button>`);
-  const editDel = w => (S.preview ? '' : `<button class="btn sm" data-act="edit" data-id="${w.id}">Edit</button><button class="btn sm danger" data-act="del" data-id="${w.id}">Delete</button>`);
+  const isBoss = eff().role === 'boss';
+  const editLink = (r, k) => (S.preview || !isBoss ? '' : `<button class="btn sm" data-act="editlink" data-id="${r.w.id}" data-i="${r.i}" data-k="${k}">Edit</button><button class="btn sm danger" data-act="del" data-id="${r.w.id}">Delete</button>`);
+  const editDel = w => (S.preview || (!isBoss && LIVE_STATUSES.includes(w.status)) ? '' : `<button class="btn sm" data-act="edit" data-id="${w.id}">Edit</button><button class="btn sm danger" data-act="del" data-id="${w.id}">Delete</button>`);
   const mk = (base, mine) => {
     const rows = (pred, ready) => linkRowsOf(base, pred, ready);
     const who = mine ? [] : [['Name', r => esc(memberName(r.w.member_id))]];
@@ -358,11 +360,11 @@ function sectionDefs(allWs) {
       exch: { label: 'Exchange links', sub: `Links on ${who2} exchange websites.`, list: rows(w => w.deal_type === 'exchange'),
         cols: [...site1, ['Target URL', r => lnk(r.x.target_url)], ['Anchor text', r => esc(r.x.anchor_text || '—')], ['Our live link', r => lnk(r.x.live_url)],
           ['Their link', r => `${lnk(r.x.their_link)}${r.cur && r.w.their_link_live ? ' (live)' : ''}`], ['Status', r => (r.cur ? pill(r.w) : '<span class="pill green">Done</span>')], ['DR / Traffic', drCell]], kind: 'exch',
-        rowAct: r => (r.cur && r.w.status === 'live' && !r.w.their_link_live ? B('theirlive', r.w.id, 'Their link is live', true) : '') + editLink(r, 'exch') },
+        rowAct: r => act(r.cur && r.w.status === 'live' && !r.w.their_link_live ? B('theirlive', r.w.id, 'Their link is live', true) : '') + editLink(r, 'exch') },
       inv: { label: 'Invoices and payments', sub: `Invoices for ${who2} paid websites.`, list: rows(w => w.deal_type === 'paid'),
         cols: [...site1, ['Target URL', r => lnk(r.x.target_url)], ['Invoice', r => (r.x.invoice_url ? lnk(r.x.invoice_url) : 'No invoice link yet')], ['Amount', r => money(r.x.price)],
           ['Status', r => (r.cur ? pill(r.w) : '<span class="pill green">Paid</span>')], ['DR / Traffic', drCell]],
-        kind: 'inv', rowAct: r => (r.cur && ['live', 'invoice_received'].includes(r.w.status) ? invBtns(r.w) : '') + editLink(r, 'inv') },
+        kind: 'inv', rowAct: r => act(r.cur && ['live', 'invoice_received'].includes(r.w.status) ? invBtns(r.w) : '') + editLink(r, 'inv') },
     };
   };
   const my = mk(mineList, true), team = mk(ws, false);
@@ -371,7 +373,7 @@ function sectionDefs(allWs) {
     mylinks: my.links,
     myexch: my.exch,
     mynext: { label: 'Next link possible', sub: 'Your own finished websites. Add the next link.', list: mineList.filter(nextPossible),
-      cols: [['Website', siteCell], ['Links placed', r => `${linkNo(r.w)}`], ['DR / Traffic', drCell]], rowAct: r => ownActions(r.w) + editDel(r.w), wrap: true },
+      cols: [['Website', siteCell], ['Links placed', r => `${linkNo(r.w)}`], ['DR / Traffic', drCell]], rowAct: r => act(ownActions(r.w)) + editDel(r.w), wrap: true },
     myinv: my.inv,
     needs: { label: 'Needs a link (Approved)', sub: 'Approved websites that are waiting for a target URL and anchor.', list: ws.filter(w => w.status === 'approved'),
       extra: [['Possible links', w => w.possible_links ?? '?']], act: w => act(`${B('addlink', w.id, 'Add link', true)}<button class="btn" data-act="bossedit" data-id="${w.id}">Edit</button><button class="btn danger" data-act="reject" data-id="${w.id}">Reject</button>`) },
@@ -442,7 +444,7 @@ function sectionView(key) {
   }
   const extra = d.extra || [['Updated', w => (w.updated_at || '').slice(0, 10)]];
   const hasAct = d.own || d.act;
-  const actCell = w => (d.own ? `${w.status === 'approved' ? ownActions(w) : ''}${ownStep(w)}${S.preview ? '' : `<button class="btn sm" data-act="edit" data-id="${w.id}">Edit</button><button class="btn sm danger" data-act="del" data-id="${w.id}">Delete</button>`}` : d.act(w));
+  const actCell = w => (d.own ? `${w.status === 'approved' && eff().role === 'boss' ? ownActions(w) : ''}${ownStep(w)}${w.status === 'sent' && eff().role !== 'boss' && !S.preview ? `<button class="btn" data-act="reqchange" data-id="${w.id}">${w.change_request ? 'Edit request' : 'Request change'}</button>` : ''}${S.preview || (eff().role !== 'boss' && LIVE_STATUSES.includes(w.status)) ? '' : `<button class="btn sm" data-act="edit" data-id="${w.id}">Edit</button><button class="btn sm danger" data-act="del" data-id="${w.id}">Delete</button>`}` : d.act(w));
   return `<h2>${d.label} <span class="badge">${all.length}</span></h2>${d.sub ? `` : ''}
     ${d.add ? `<div class="toolbar"><button class="btn primary" data-act="add" ${readOnly() ? 'disabled' : ''}>+ Add website</button></div>` : ''}${d.own ? mineHeader(all) : ''}
     ${d.search ? `<div class="toolbar"><input type="search" id="bq" placeholder="Search website" value="${esc(S.bossQ)}" data-input="bq"></div>` : ''}
@@ -488,7 +490,11 @@ function sidebar() {
       row(['inv', 'Invoices & payments', d.inv.list.length, 'inv']) + row(['rejected', 'Rejected', d.rejected.list.length, 'rejected']) + row(['all', 'All websites', d.all.list.length, 'all']) + row(['team', 'Team managing', d.team.list.length, 'team']) +
       row(['trash', 'Trash', d.trash.list.length, 'trash']).replace('class="nav ', 'class="nav trashbtn ');
   } else if (role === 'manager') {
-    items = [['home', 'Websites', 'all'], ['commission', 'Commission', 'commission'], ['settings', 'Settings', 'settings']].map(([k, l, ic]) => btn(k, l, null, S.nav === k, 'nav', ic)).join('');
+    const d = sectionDefs(ws);
+    const chev = (open, act) => `<span class="chev ${open ? 'open' : ''}" data-act="${act}" role="button" aria-label="Show or hide sections"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span></button>`;
+    const row = ([k, l, n, ic], sub) => btn(k, l, n, S.nav === k, 'nav', ic).replace('class="nav ', `class="nav ${sub ? 'sub ' : ''}`);
+    const kids = S.mineOpen ? [['mylinks', 'Website links', d.mylinks.list.length, 'wlinks'], ['myexch', 'Exchange links', d.myexch.list.length, 'exch'], ['mynext', 'Next link possible', d.mynext.list.length, 'next'], ['myinv', 'Invoices & payments', d.myinv.list.length, 'inv']].map(r => row(r, true)).join('') : '';
+    items = row(['home', 'Websites', null, 'all']) + row(['mine', 'My websites', d.mine.list.length, 'mine']).replace(/<\/button>$/, chev(S.mineOpen, 'minetoggle')) + kids + row(['commission', 'Commission', null, 'commission']) + row(['settings', 'Settings', null, 'settings']);
   } else {
     const cnt = { all: w => !LIVE_STATUSES.includes(w.status), action: needsAction, boss: w => ['boss_review', 'approved'].includes(w.status), live: w => LIVE_STATUSES.includes(w.status), rejected: w => w.status === 'rejected' };
     const mf = (k, l, ic, sub) => btn(k, l, ws.filter(cnt[k]).length, S.mem.f === k && S.nav === 'home', 'mfilter', ic).replace('class="nav ', `class="nav ${sub ? 'sub ' : ''}`);
@@ -589,7 +595,8 @@ function render() {
   const a = document.activeElement, focus = a && a.id ? { id: a.id, s: a.selectionStart, e: a.selectionEnd } : null;
   const role = eff().role;
   if (['commission', 'settings'].includes(S.nav) && role !== 'manager') S.nav = 'home';
-  const body = role === 'member' && S.nav === 'minv' ? invoicesView() : role === 'member' && S.nav === 'earn' ? earnView() : role === 'member' && S.nav === 'trash' ? trashHtml(S.trash, 'Trash', false, w => `<button class="btn" data-act="restore" data-id="${w.id}">Restore</button><button class="btn sm danger" data-act="purge" data-id="${w.id}">Delete forever</button>`) : role === 'boss' && S.nav !== 'home' && sectionDefs(visibleSites())[S.nav] ? sectionView(S.nav) : role === 'manager' ? managerView() : role === 'boss' ? bossView() : memberView();
+  const mySections = ['mine', 'mylinks', 'myexch', 'mynext', 'myinv'];
+  const body = role === 'manager' && mySections.includes(S.nav) ? sectionView(S.nav) : role === 'member' && S.nav === 'minv' ? invoicesView() : role === 'member' && S.nav === 'earn' ? earnView() : role === 'member' && S.nav === 'trash' ? trashHtml(S.trash, 'Trash', false, w => `<button class="btn" data-act="restore" data-id="${w.id}">Restore</button><button class="btn sm danger" data-act="purge" data-id="${w.id}">Delete forever</button>`) : role === 'boss' && S.nav !== 'home' && sectionDefs(visibleSites())[S.nav] ? sectionView(S.nav) : role === 'manager' ? managerView() : role === 'boss' ? bossView() : memberView();
   app.innerHTML = header() + `<div class="layout">${sidebar()}<main>${body}</main></div>`;
   if (focus) { const n = document.getElementById(focus.id); if (n) { n.focus(); try { n.setSelectionRange(focus.s, focus.e); } catch (e) {} } }
 }
