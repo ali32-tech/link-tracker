@@ -353,7 +353,7 @@ function sectionDefs(allWs) {
     return {
       links: { label: 'Website links', sub: `Links sent to ${who2} websites.`, list: rows(() => true, !mine),
         cols: [...site1, ['Target URL', r => lnk(r.x.target_url)], ['Anchor text', r => esc(r.x.anchor_text || '—')], ['Status', r => (r.cur ? pill(r.w) : '<span class="pill green">Done</span>')], ...(mine ? [] : [['Request', r => (r.cur && r.w.change_request ? `<span class="pill amber">Change requested</span><div class="mini">${esc(r.w.change_request)}</div>` : '—')]]), ['DR / Traffic', drCell]], kind: 'links',
-        rowAct: r => (r.cur && r.w.change_request && !S.preview ? `<button class="btn primary" data-act="clearreq" data-id="${r.w.id}">Done</button>` : '') + editLink(r, 'links') },
+        rowAct: r => (!mine && r.cur && ['approved', 'link_ready'].includes(r.w.status) && !S.preview ? act(`<button class="btn" data-act="toreview" data-id="${r.w.id}">Restore</button>`) : '') + (r.cur && r.w.change_request && !S.preview ? `<button class="btn primary" data-act="clearreq" data-id="${r.w.id}">Done</button>` : '') + editLink(r, 'links') },
       exch: { label: 'Exchange links', sub: `Links on ${who2} exchange websites.`, list: rows(w => w.deal_type === 'exchange'),
         cols: [...site1, ['Target URL', r => lnk(r.x.target_url)], ['Anchor text', r => esc(r.x.anchor_text || '—')], ['Our live link', r => lnk(r.x.live_url)],
           ['Their link', r => `${lnk(r.x.their_link)}${r.cur && r.w.their_link_live ? ' (live)' : ''}`], ['Status', r => (r.cur ? pill(r.w) : '<span class="pill green">Done</span>')], ['DR / Traffic', drCell]], kind: 'exch',
@@ -603,7 +603,7 @@ function render() {
 }
 
 // ---------- actions ----------
-const WRITE = new Set(['approve', 'approvelink', 'reject', 'addlink', 'invoice', 'paid', 'theirlive', 'nextlink', 'add', 'edit', 'del', 'sentbtn', 'livebtn', 'import', 'rminvite', 'bossedit', 'restore', 'purge', 'editlink', 'reqchange', 'clearreq', 'bulkrestore', 'bulkpurge', 'ackdone']);
+const WRITE = new Set(['approve', 'approvelink', 'reject', 'addlink', 'invoice', 'paid', 'theirlive', 'nextlink', 'add', 'edit', 'del', 'sentbtn', 'livebtn', 'import', 'rminvite', 'bossedit', 'restore', 'purge', 'editlink', 'reqchange', 'clearreq', 'bulkrestore', 'bulkpurge', 'ackdone', 'toreview']);
 const need = (id, msg, fields, form, title) => openDrawer(title, `<form data-form="${form}" data-id="${id}">${fields}<div style="margin-top:14px"><button class="btn primary big" type="submit">${msg}</button></div></form>`, 'form', id);
 const site = id => S.sites.find(w => w.id === id);
 const pairHtml = () => `<div class="pair"><label>Another link: Target URL</label><input name="more_target" placeholder="https://client-site.com/page"><label>Another link: Anchor text</label><input name="more_anchor"></div>`;
@@ -648,6 +648,7 @@ const actions = {
       <label>What should change?</label><textarea name="note" rows="4" required maxlength="500">${esc(w.change_request || '')}</textarea>
       <div style="margin-top:14px"><button class="btn primary big" type="submit">Send to admin</button></div>${w.change_request ? `<div style="margin-top:10px"><button type="button" class="btn danger" data-act="clearreq" data-id="${w.id}">Cancel my request</button></div>` : ''}</form>`, 'form', w.id);
   },
+  toreview: el => upd(el.dataset.id, { status: 'boss_review' }, 'Moved back to Review'),
   clearreq: el => { const w = site(el.dataset.id); return upd(el.dataset.id, w && w.member_id !== S.profile.id ? { change_request: null, change_done_at: new Date().toISOString() } : { change_request: null }, 'Request cleared'); },
   ackdone: el => upd(el.dataset.id, { change_done_at: null }, 'Okay'),
   linkdetail: el => {
