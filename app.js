@@ -497,10 +497,10 @@ function sidebar() {
     const wsKids = S.wsOpen ? [['rejected', 'Rejected', d.rejected.list.length, 'rejected'], ['exch', 'Exchange links', d.exch.list.length, 'exch'], ['livel', 'Live links', d.livel.list.length, 'live']].map(r => row(r, true)).join('') : '';
     items = row(['home', 'Websites', null, 'all']).replace(/<\/button>$/, chev(S.wsOpen, 'wstoggle')) + wsKids + row(['mine', 'My websites', d.mine.list.length, 'mine']).replace(/<\/button>$/, chev(S.mineOpen, 'minetoggle')) + kids + row(['myinv', 'Invoices & payments', d.myinv.list.length, 'inv']) + row(['commission', 'Commission', null, 'commission']) + row(['settings', 'Settings', null, 'settings']);
   } else {
-    const cnt = { all: w => !LIVE_STATUSES.includes(w.status), action: needsAction, boss: w => ['boss_review', 'approved'].includes(w.status), live: w => LIVE_STATUSES.includes(w.status), rejected: w => w.status === 'rejected' };
+    const cnt = { all: w => !LIVE_STATUSES.includes(w.status) && w.status !== 'rejected', action: needsAction, boss: w => ['boss_review', 'approved'].includes(w.status), live: w => LIVE_STATUSES.includes(w.status), rejected: w => w.status === 'rejected' };
     const mf = (k, l, ic, sub) => btn(k, l, ws.filter(cnt[k]).length, S.mem.f === k && S.nav === 'home', 'mfilter', ic).replace('class="nav ', `class="nav ${sub ? 'sub ' : ''}`);
     const arrow = `<span class="chev ${S.mwOpen ? 'open' : ''}" data-act="mwtoggle" role="button" aria-label="Show or hide sections"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span></button>`;
-    items = mf('all', 'My Websites', 'mine').replace(/<\/button>$/, arrow) + (S.mwOpen ? mf('action', 'Action needed', 'action', true) + mf('boss', 'Under review', 'review', true) + mf('live', 'Live sites', 'site', true) : '') + btn('earn', 'Live links', null, S.nav === 'earn', 'nav', 'needs') + btn('minv', 'Invoices', null, S.nav === 'minv', 'nav', 'inv') + mf('rejected', 'Rejected', 'rejected') + btn('trash', 'Trash', S.trash.length, S.nav === 'trash', 'nav', 'trash').replace('class="nav ', 'class="nav trashbtn ');
+    items = mf('all', 'My Websites', 'mine').replace(/<\/button>$/, arrow) + (S.mwOpen ? mf('boss', 'Under review', 'review', true) + mf('live', 'Live sites', 'site', true) : '') + btn('earn', 'Live links', null, S.nav === 'earn', 'nav', 'needs') + btn('minv', 'Invoices', null, S.nav === 'minv', 'nav', 'inv') + mf('rejected', 'Rejected', 'rejected') + btn('trash', 'Trash', S.trash.length, S.nav === 'trash', 'nav', 'trash').replace('class="nav ', 'class="nav trashbtn ');
   }
   return `<nav class="side" aria-label="Sections">${items}</nav>`;
 }
@@ -543,11 +543,11 @@ function memberView() {
   const ws = visibleSites();
   const f = S.mem.f, q = S.mem.q.trim().toLowerCase();
   const filt = {
-    all: w => !LIVE_STATUSES.includes(w.status), action: needsAction, boss: w => ['boss_review', 'approved'].includes(w.status),
+    all: w => !LIVE_STATUSES.includes(w.status) && w.status !== 'rejected', action: needsAction, boss: w => ['boss_review', 'approved'].includes(w.status),
     live: w => LIVE_STATUSES.includes(w.status), rejected: w => w.status === 'rejected',
   }[f];
   const list = ws.filter(w => filt(w) && (!q || w.domain.includes(q)));
-  const title = { all: 'My Websites', action: 'Action needed', boss: 'Under review', live: 'Live sites', rejected: 'Rejected' }[f];
+  const title = { all: 'My Websites', boss: 'Under review', live: 'Live sites', rejected: 'Rejected' }[f];
   return `<h2>${title} <span class="badge">${list.length}</span></h2>
     ${f === 'all' ? `<div class="toolbar"><button class="btn primary" data-act="add" ${readOnly() ? 'disabled' : ''}>+ Add website</button>
       <input type="search" id="memq" placeholder="Search" value="${esc(S.mem.q)}" data-input="memq"></div>` : ''}
@@ -678,7 +678,7 @@ const actions = {
   minetoggle: () => { S.mineOpen = !S.mineOpen; render(); },
   wstoggle: () => { S.wsOpen = !S.wsOpen; render(); },
   clearf: () => { S.mf = { status: '', member: '', deal: '', q: '' }; render(); },
-  mfilter: el => { S.mem.f = el.dataset.v; S.nav = 'home'; S.mwOpen = ['all', 'action', 'boss', 'live'].includes(S.mem.f); render(); },
+  mfilter: el => { S.mem.f = el.dataset.v; S.nav = 'home'; S.mwOpen = ['all', 'boss', 'live'].includes(S.mem.f); render(); },
   mwtoggle: () => { S.mwOpen = !S.mwOpen; render(); },
   exitpreview: () => { S.preview = null; render(); },
   open: el => openDetail(el.dataset.id),
