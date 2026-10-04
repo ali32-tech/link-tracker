@@ -500,7 +500,7 @@ function sidebar() {
     const cnt = { all: w => !LIVE_STATUSES.includes(w.status) && w.status !== 'rejected', action: needsAction, boss: w => ['boss_review', 'approved'].includes(w.status), live: w => LIVE_STATUSES.includes(w.status), rejected: w => w.status === 'rejected' };
     const mf = (k, l, ic, sub) => btn(k, l, ws.filter(cnt[k]).length, S.mem.f === k && S.nav === 'home', 'mfilter', ic).replace('class="nav ', `class="nav ${sub ? 'sub ' : ''}`);
     const arrow = `<span class="chev ${S.mwOpen ? 'open' : ''}" data-act="mwtoggle" role="button" aria-label="Show or hide sections"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span></button>`;
-    items = mf('all', 'My Websites', 'mine').replace(/<\/button>$/, arrow) + (S.mwOpen ? mf('boss', 'Under review', 'review', true) + mf('live', 'Live sites', 'site', true) : '') + btn('earn', 'Live links', null, S.nav === 'earn', 'nav', 'needs') + btn('minv', 'Invoices', null, S.nav === 'minv', 'nav', 'inv') + mf('rejected', 'Rejected', 'rejected') + btn('trash', 'Trash', S.trash.length, S.nav === 'trash', 'nav', 'trash').replace('class="nav ', 'class="nav trashbtn ');
+    items = mf('all', 'My Websites', 'mine').replace(/<\/button>$/, arrow) + (S.mwOpen ? mf('live', 'Live sites', 'site', true) : '') + btn('earn', 'Live links', null, S.nav === 'earn', 'nav', 'needs') + btn('mexch', 'Exchange links', null, S.nav === 'mexch', 'nav', 'exch') + btn('minv', 'Invoices', null, S.nav === 'minv', 'nav', 'inv') + mf('rejected', 'Rejected', 'rejected') + btn('trash', 'Trash', S.trash.length, S.nav === 'trash', 'nav', 'trash').replace('class="nav ', 'class="nav trashbtn ');
   }
   return `<nav class="side" aria-label="Sections">${items}</nav>`;
 }
@@ -516,6 +516,16 @@ function bossView() {
 
 // ---------- Member ----------
 const needsAction = w => ['link_ready', 'sent'].includes(w.status);
+
+function exchangeView() {
+  const rows = visibleSites().filter(w => w.deal_type === 'exchange').flatMap(w => [
+    ...hist(w).map(h => ({ w, ours: h.live_url, theirs: h.their_link, st: 'done', d: h.live_date })),
+    ...(LIVE_STATUSES.includes(w.status) ? [{ w, ours: w.live_url, theirs: w.their_link, st: w.their_link_live ? 'done' : 'wait', d: w.live_date }] : []),
+  ]).sort((x, y) => (y.d || '').localeCompare(x.d || ''));
+  return `<h2>Exchange links <span class="badge">${rows.length}</span></h2>
+    ${rows.length ? `<div class="tablewrap"><table><thead><tr><th>Website</th><th>Our link</th><th>Their link</th><th>Status</th><th>Date</th></tr></thead><tbody>${rows.map(r => `<tr data-act="open" data-id="${r.w.id}"><td><b>${esc(r.w.domain)}</b></td><td>${lnk(r.ours)}</td><td>${lnk(r.theirs)}</td>
+      <td><span class="pill ${r.st === 'done' ? 'green' : 'amber'}">${r.st === 'done' ? 'Exchange complete' : 'Waiting for their link'}</span></td><td>${esc(r.d || '—')}</td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">No exchange links yet.</div>'}`;
+}
 
 function invoicesView() {
   const label = { live: 'Invoice sent', invoice_received: 'Received by admin', paid: 'Paid' };
@@ -567,7 +577,7 @@ function memberRow(w) {
   const locked = LIVE_STATUSES.includes(w.status);
   return `<tr data-act="open" data-id="${w.id}"><td><b>${esc(w.domain)}</b></td><td>${dealLabel(w.deal_type)}</td><td class="num">${money(w.price)}</td><td>${w.da ?? '—'} / ${w.traffic ?? '—'}</td>
     <td>${pill(w)}</td><td>${esc(t + more)}${w.change_request ? `<div class="mini hint2">Change requested: ${esc(w.change_request)}</div>` : ''}${w.change_done_at ? `<div class="mini ok">Admin updated the link. <button class="btn sm" data-act="ackdone" data-id="${w.id}">Got it</button></div>` : ''}</td>
-    <td class="nowrap">${step}${locked ? '' : `<button class="btn sm" data-act="edit" data-id="${w.id}">Edit</button><button class="btn sm danger" data-act="del" data-id="${w.id}">Delete</button>`}</td></tr>`;
+    <td class="nowrap">${step}${locked ? '' : `${w.status === 'rejected' ? '' : `<button class="btn sm" data-act="edit" data-id="${w.id}">Edit</button>`}<button class="btn sm danger" data-act="del" data-id="${w.id}">Delete</button>`}</td></tr>`;
 }
 
 function siteForm(w) {
@@ -597,7 +607,7 @@ function render() {
   const role = eff().role;
   if (['commission', 'settings'].includes(S.nav) && role !== 'manager') S.nav = 'home';
   const mySections = ['mine', 'mylinks', 'myexch', 'mynext', 'myinv', 'rejected', 'exch', 'livel'];
-  const body = role === 'manager' && mySections.includes(S.nav) ? sectionView(S.nav) : role === 'member' && S.nav === 'minv' ? invoicesView() : role === 'member' && S.nav === 'earn' ? earnView() : role === 'member' && S.nav === 'trash' ? trashHtml(S.trash, 'Trash', false, w => `<button class="btn" data-act="restore" data-id="${w.id}">Restore</button><button class="btn sm danger" data-act="purge" data-id="${w.id}">Delete forever</button>`) : role === 'boss' && S.nav !== 'home' && sectionDefs(visibleSites())[S.nav] ? sectionView(S.nav) : role === 'manager' ? managerView() : role === 'boss' ? bossView() : memberView();
+  const body = role === 'manager' && mySections.includes(S.nav) ? sectionView(S.nav) : role === 'member' && S.nav === 'mexch' ? exchangeView() : role === 'member' && S.nav === 'minv' ? invoicesView() : role === 'member' && S.nav === 'earn' ? earnView() : role === 'member' && S.nav === 'trash' ? trashHtml(S.trash, 'Trash', false, w => `<button class="btn" data-act="restore" data-id="${w.id}">Restore</button><button class="btn sm danger" data-act="purge" data-id="${w.id}">Delete forever</button>`) : role === 'boss' && S.nav !== 'home' && sectionDefs(visibleSites())[S.nav] ? sectionView(S.nav) : role === 'manager' ? managerView() : role === 'boss' ? bossView() : memberView();
   app.innerHTML = header() + `<div class="layout">${sidebar()}<main>${body}</main></div>`;
   if (focus) { const n = document.getElementById(focus.id); if (n) { n.focus(); try { n.setSelectionRange(focus.s, focus.e); } catch (e) {} } }
 }
@@ -678,7 +688,7 @@ const actions = {
   minetoggle: () => { S.mineOpen = !S.mineOpen; render(); },
   wstoggle: () => { S.wsOpen = !S.wsOpen; render(); },
   clearf: () => { S.mf = { status: '', member: '', deal: '', q: '' }; render(); },
-  mfilter: el => { S.mem.f = el.dataset.v; S.nav = 'home'; S.mwOpen = ['all', 'boss', 'live'].includes(S.mem.f); render(); },
+  mfilter: el => { S.mem.f = el.dataset.v; S.nav = 'home'; S.mwOpen = ['all', 'live'].includes(S.mem.f); render(); },
   mwtoggle: () => { S.mwOpen = !S.mwOpen; render(); },
   exitpreview: () => { S.preview = null; render(); },
   open: el => openDetail(el.dataset.id),
