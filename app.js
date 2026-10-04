@@ -381,7 +381,8 @@ function sectionDefs(allWs) {
     exch: team.exch,
     next: { label: 'Next link possible on the same website', sub: 'Finished websites that can take more links.', list: ws.filter(nextPossible),
       extra: [['Links placed', w => `${linkNo(w)} of ${w.possible_links}`]], act: w => act(B('nextlink', w.id, 'Add next link', true)) },
-    rejected: { label: 'Rejected', sub: 'Websites you have rejected.', list: ws.filter(w => w.status === 'rejected'), extra: [['Reason', w => esc(w.reject_reason || '—')], ['Updated', w => (w.updated_at || '').slice(0, 10)]] },
+    rejected: { label: 'Rejected', sub: 'Websites you have rejected.', list: ws.filter(w => w.status === 'rejected'), extra: [['Reason', w => esc(w.reject_reason || '—')], ['Updated', w => (w.updated_at || '').slice(0, 10)]],
+      act: w => act(`${B('approve', w.id, 'Approve', true)}${B('approvelink', w.id, 'Approve + add link')}`) },
     trash: { label: 'Trash', sub: 'Websites you deleted. Restore them, or delete them forever.', list: S.trash, extra: [['Deleted', w => (w.deleted_at || '').slice(0, 10)]],
       act: w => act(`<button class="btn" data-act="restore" data-id="${w.id}">Restore</button><button class="btn sm danger" data-act="purge" data-id="${w.id}">Delete forever</button>`) },
     all: { label: 'All websites', sub: '', list: ws.filter(w => !S.bossQ.trim() || w.domain.includes(S.bossQ.trim().toLowerCase())), search: true,
@@ -816,11 +817,11 @@ const forms = {
     }
     return upd(f.dataset.id, { status: 'live', live_url: txt(d.get('live_url')), their_link: txt(d.get('their_link')), invoice_url: invoice }, 'Status: Live');
   },
-  approve: (f, d) => upd(f.dataset.id, { status: 'approved', possible_links: num(d.get('possible_links')) }, 'Status: Approved'),
+  approve: (f, d) => upd(f.dataset.id, { status: 'approved', possible_links: num(d.get('possible_links')), reject_reason: null }, 'Status: Approved'),
   approvelink(f, d) {
     const more = moreLinks(d);
     if (!more) return;
-    return upd(f.dataset.id, { status: 'link_ready', possible_links: Math.max(num(d.get('possible_links')) || 1, 1 + more.length), target_url: txt(d.get('target_url')), anchor_text: txt(d.get('anchor_text')), queued_links: more }, 'Status: Link Ready');
+    return upd(f.dataset.id, { status: 'link_ready', possible_links: Math.max(num(d.get('possible_links')) || 1, 1 + more.length), target_url: txt(d.get('target_url')), anchor_text: txt(d.get('anchor_text')), queued_links: more, reject_reason: null }, 'Status: Link Ready');
   },
   reject: (f, d) => {
     const other = txt(d.get('other_reason'));
