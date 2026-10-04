@@ -245,13 +245,11 @@ function managerView() {
 
 function managerSites() {
   const f = S.mf, all = S.sites;
-  const counts = Object.fromEntries(Object.keys(ST).map(k => [k, all.filter(w => w.status === k).length]));
   const q = f.q.trim().toLowerCase();
   const rows = all.filter(w => (!f.status || w.status === f.status) && (!f.member || w.member_id === f.member) &&
     (!f.deal || w.deal_type === f.deal) && (!q || w.domain.includes(q) || (w.contact_email || '').toLowerCase().includes(q)));
   const members = S.people.filter(p => p.role === 'member' || p.id === S.profile.id);
-  return `<div class="pipe">${Object.keys(ST).map(k => `<button class="${f.status === k ? 'on' : ''}" data-act="pipe" data-v="${k}"><b>${counts[k]}</b><span>${ST[k].label}</span></button>`).join('')}</div>
-    <div class="toolbar"><input type="search" id="mq" placeholder="Search website or email" value="${esc(f.q)}" data-input="mq">
+  return `<div class="toolbar"><input type="search" id="mq" placeholder="Search website or email" value="${esc(f.q)}" data-input="mq">
       <select data-change="mmember"><option value="">All members</option>${members.map(m => `<option value="${m.id}" ${f.member === m.id ? 'selected' : ''}>${esc(m.name || m.email)}</option>`).join('')}</select>
       <select data-change="mdeal"><option value="">All deals</option><option value="exchange" ${f.deal === 'exchange' ? 'selected' : ''}>Exchange</option><option value="paid" ${f.deal === 'paid' ? 'selected' : ''}>Paid</option></select>
       ${f.status || f.member || f.deal || f.q ? '<button class="btn sm" data-act="clearf">Clear filters</button>' : ''}</div>
@@ -674,7 +672,6 @@ const actions = {
   nav: el => { S.nav = el.dataset.v; S.revOpen = ['home', 'needs', 'rlinks', 'exch', 'next'].includes(S.nav); S.mineOpen = (S.profile.role === 'manager' ? ['mine', 'mylinks', 'myexch'] : ['mine', 'mylinks', 'myexch', 'mynext', 'myinv']).includes(S.nav); if (S.profile.role === 'member') S.mwOpen = false; render(); window.scrollTo(0, 0); },
   revtoggle: () => { S.revOpen = !S.revOpen; render(); },
   minetoggle: () => { S.mineOpen = !S.mineOpen; render(); },
-  pipe: el => { S.mf.status = S.mf.status === el.dataset.v ? '' : el.dataset.v; render(); },
   clearf: () => { S.mf = { status: '', member: '', deal: '', q: '' }; render(); },
   mfilter: el => { S.mem.f = el.dataset.v; S.nav = 'home'; S.mwOpen = ['all', 'action', 'boss', 'live'].includes(S.mem.f); render(); },
   mwtoggle: () => { S.mwOpen = !S.mwOpen; render(); },
