@@ -253,8 +253,7 @@ function managerSites() {
       <select data-change="mmember"><option value="">All members</option>${members.map(m => `<option value="${m.id}" ${f.member === m.id ? 'selected' : ''}>${esc(m.name || m.email)}</option>`).join('')}</select>
       <select data-change="mdeal"><option value="">All deals</option><option value="exchange" ${f.deal === 'exchange' ? 'selected' : ''}>Exchange</option><option value="paid" ${f.deal === 'paid' ? 'selected' : ''}>Paid</option></select>
       ${f.status || f.member || f.deal || f.q ? '<button class="btn sm" data-act="clearf">Clear filters</button>' : ''}</div>
-    <div class="btns" style="margin-bottom:12px"><button class="btn primary" data-act="add">+ Add website</button><button class="btn" data-act="whatsapp">Copy WhatsApp message</button>
-      <button class="btn" data-act="import">Import</button><button class="btn" data-act="export">Export CSV</button></div>
+    <div class="btns" style="margin-bottom:12px"><button class="btn" data-act="whatsapp">Copy WhatsApp message</button><button class="btn" data-act="export">Export CSV</button></div>
     ${rows.length ? `<div class="tablewrap"><table><thead><tr><th>Website</th><th>Name</th><th>Price</th><th>DR / Traffic</th><th class="num">Links</th><th>Status</th><th>Updated</th><th>Action</th></tr></thead><tbody>
       ${rows.map(w => `<tr data-act="open" data-id="${w.id}"><td><b>${esc(w.domain)}</b></td><td>${esc(memberName(w.member_id))}</td>
       <td>${w.deal_type === 'paid' ? 'Paid ' + money(w.price) : 'Exchange'}</td><td>${w.da ?? '—'} / ${w.traffic ?? '—'}</td><td class="num">${ownBoss(w) ? hist(w).length + (roundDone(w) ? 1 : 0) : w.possible_links ? `${hist(w).length + (roundDone(w) ? 1 : 0)} / ${w.possible_links}` : '—'}</td>
@@ -446,7 +445,7 @@ function sectionView(key) {
   const hasAct = d.own || d.act;
   const actCell = w => (d.own ? `${w.status === 'approved' && eff().role === 'boss' ? ownActions(w) : ''}${ownStep(w)}${w.status === 'sent' && eff().role !== 'boss' && !S.preview ? `<button class="btn" data-act="reqchange" data-id="${w.id}">${w.change_request ? 'Edit request' : 'Request change'}</button>` : ''}${S.preview ? '' : `<button class="btn sm" data-act="edit" data-id="${w.id}">Edit</button><button class="btn sm danger" data-act="del" data-id="${w.id}">Delete</button>`}` : d.act(w));
   return `<h2>${d.label} <span class="badge">${all.length}</span></h2>${d.sub ? `` : ''}
-    ${d.add ? `<div class="toolbar"><button class="btn primary" data-act="add" ${readOnly() ? 'disabled' : ''}>+ Add website</button></div>` : ''}${d.own ? mineHeader(all) : ''}
+    ${d.add ? `<div class="toolbar"><button class="btn primary" data-act="add" ${readOnly() ? 'disabled' : ''}>+ Add website</button>${eff().role === 'manager' ? `<button class="btn" data-act="import" ${readOnly() ? 'disabled' : ''}>Import</button>` : ''}</div>` : ''}${d.own ? mineHeader(all) : ''}
     ${d.search ? `<div class="toolbar"><input type="search" id="bq" placeholder="Search website" value="${esc(S.bossQ)}" data-input="bq"></div>` : ''}
     ${!d.list.length ? '<div class="empty">Nothing here right now.</div>' : `<div class="tablewrap"><table><thead><tr><th>Website</th><th>Name</th><th>Deal</th><th class="num">Price</th><th>DR / Traffic</th><th class="num">Links</th><th>Status</th>${extra.map(([l]) => `<th>${l}</th>`).join('')}${hasAct ? '<th>Action</th>' : ''}</tr></thead><tbody>
       ${d.list.map(w => `<tr data-act="open" data-id="${w.id}"><td><b>${esc(w.domain)}</b></td><td>${esc(memberName(w.member_id))}</td><td>${dealLabel(w.deal_type)}</td>
