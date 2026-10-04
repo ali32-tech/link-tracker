@@ -347,7 +347,7 @@ function sectionDefs(allWs) {
   const drCell = r => `${r.w.da ?? '—'} / ${r.w.traffic ?? '—'}`;
   const isBoss = eff().role === 'boss';
   const editLink = (r, k) => (S.preview || !isBoss ? '' : `<button class="btn sm" data-act="editlink" data-id="${r.w.id}" data-i="${r.i}" data-k="${k}">Edit</button><button class="btn sm danger" data-act="del" data-id="${r.w.id}">Delete</button>`);
-  const editDel = w => (S.preview || (!isBoss && LIVE_STATUSES.includes(w.status)) ? '' : `<button class="btn sm" data-act="edit" data-id="${w.id}">Edit</button><button class="btn sm danger" data-act="del" data-id="${w.id}">Delete</button>`);
+  const editDel = w => (S.preview ? '' : `<button class="btn sm" data-act="edit" data-id="${w.id}">Edit</button><button class="btn sm danger" data-act="del" data-id="${w.id}">Delete</button>`);
   const mk = (base, mine) => {
     const rows = (pred, ready) => linkRowsOf(base, pred, ready);
     const who = mine ? [] : [['Name', r => esc(memberName(r.w.member_id))]];
@@ -444,7 +444,7 @@ function sectionView(key) {
   }
   const extra = d.extra || [['Updated', w => (w.updated_at || '').slice(0, 10)]];
   const hasAct = d.own || d.act;
-  const actCell = w => (d.own ? `${w.status === 'approved' && eff().role === 'boss' ? ownActions(w) : ''}${ownStep(w)}${w.status === 'sent' && eff().role !== 'boss' && !S.preview ? `<button class="btn" data-act="reqchange" data-id="${w.id}">${w.change_request ? 'Edit request' : 'Request change'}</button>` : ''}${S.preview || (eff().role !== 'boss' && LIVE_STATUSES.includes(w.status)) ? '' : `<button class="btn sm" data-act="edit" data-id="${w.id}">Edit</button><button class="btn sm danger" data-act="del" data-id="${w.id}">Delete</button>`}` : d.act(w));
+  const actCell = w => (d.own ? `${w.status === 'approved' && eff().role === 'boss' ? ownActions(w) : ''}${ownStep(w)}${w.status === 'sent' && eff().role !== 'boss' && !S.preview ? `<button class="btn" data-act="reqchange" data-id="${w.id}">${w.change_request ? 'Edit request' : 'Request change'}</button>` : ''}${S.preview ? '' : `<button class="btn sm" data-act="edit" data-id="${w.id}">Edit</button><button class="btn sm danger" data-act="del" data-id="${w.id}">Delete</button>`}` : d.act(w));
   return `<h2>${d.label} <span class="badge">${all.length}</span></h2>${d.sub ? `` : ''}
     ${d.add ? `<div class="toolbar"><button class="btn primary" data-act="add" ${readOnly() ? 'disabled' : ''}>+ Add website</button></div>` : ''}${d.own ? mineHeader(all) : ''}
     ${d.search ? `<div class="toolbar"><input type="search" id="bq" placeholder="Search website" value="${esc(S.bossQ)}" data-input="bq"></div>` : ''}
@@ -493,8 +493,8 @@ function sidebar() {
     const d = sectionDefs(ws);
     const chev = (open, act) => `<span class="chev ${open ? 'open' : ''}" data-act="${act}" role="button" aria-label="Show or hide sections"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span></button>`;
     const row = ([k, l, n, ic], sub) => btn(k, l, n, S.nav === k, 'nav', ic).replace('class="nav ', `class="nav ${sub ? 'sub ' : ''}`);
-    const kids = S.mineOpen ? [['mylinks', 'Website links', d.mylinks.list.length, 'wlinks'], ['myexch', 'Exchange links', d.myexch.list.length, 'exch'], ['mynext', 'Next link possible', d.mynext.list.length, 'next'], ['myinv', 'Invoices & payments', d.myinv.list.length, 'inv']].map(r => row(r, true)).join('') : '';
-    items = row(['home', 'Websites', null, 'all']) + row(['mine', 'My websites', d.mine.list.length, 'mine']).replace(/<\/button>$/, chev(S.mineOpen, 'minetoggle')) + kids + row(['commission', 'Commission', null, 'commission']) + row(['settings', 'Settings', null, 'settings']);
+    const kids = S.mineOpen ? [['mylinks', 'Website links', d.mylinks.list.length, 'wlinks'], ['myexch', 'Exchange links', d.myexch.list.length, 'exch']].map(r => row(r, true)).join('') : '';
+    items = row(['home', 'Websites', null, 'all']) + row(['mine', 'My websites', d.mine.list.length, 'mine']).replace(/<\/button>$/, chev(S.mineOpen, 'minetoggle')) + kids + row(['myinv', 'Invoices & payments', d.myinv.list.length, 'inv']) + row(['commission', 'Commission', null, 'commission']) + row(['settings', 'Settings', null, 'settings']);
   } else {
     const cnt = { all: w => !LIVE_STATUSES.includes(w.status), action: needsAction, boss: w => ['boss_review', 'approved'].includes(w.status), live: w => LIVE_STATUSES.includes(w.status), rejected: w => w.status === 'rejected' };
     const mf = (k, l, ic, sub) => btn(k, l, ws.filter(cnt[k]).length, S.mem.f === k && S.nav === 'home', 'mfilter', ic).replace('class="nav ', `class="nav ${sub ? 'sub ' : ''}`);
@@ -671,7 +671,7 @@ const actions = {
   showpw: el => { const i = el.previousElementSibling; i.type = i.type === 'password' ? 'text' : 'password'; el.textContent = i.type === 'password' ? 'Show' : 'Hide'; },
   logout: async () => { if (S.chan) sb.removeChannel(S.chan); await sb.auth.signOut(); },
   close: closeDrawer,
-  nav: el => { S.nav = el.dataset.v; S.revOpen = ['home', 'needs', 'rlinks', 'exch', 'next'].includes(S.nav); S.mineOpen = ['mine', 'mylinks', 'myexch', 'mynext', 'myinv'].includes(S.nav); if (S.profile.role === 'member') S.mwOpen = false; render(); window.scrollTo(0, 0); },
+  nav: el => { S.nav = el.dataset.v; S.revOpen = ['home', 'needs', 'rlinks', 'exch', 'next'].includes(S.nav); S.mineOpen = (S.profile.role === 'manager' ? ['mine', 'mylinks', 'myexch'] : ['mine', 'mylinks', 'myexch', 'mynext', 'myinv']).includes(S.nav); if (S.profile.role === 'member') S.mwOpen = false; render(); window.scrollTo(0, 0); },
   revtoggle: () => { S.revOpen = !S.revOpen; render(); },
   minetoggle: () => { S.mineOpen = !S.mineOpen; render(); },
   pipe: el => { S.mf.status = S.mf.status === el.dataset.v ? '' : el.dataset.v; render(); },
